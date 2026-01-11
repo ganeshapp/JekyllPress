@@ -7,6 +7,16 @@
 .buildlog/
 .history
 
+# IDE
+.idea/
+*.iml
+
+# APK files (built artifacts)
+*.apk
+
+# Local agent notes
+agent.md
+
 
 
 # Flutter repo-specific
