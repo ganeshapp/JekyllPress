@@ -22,6 +22,23 @@
 
 > Stop using VS Code to write blog posts. Stop fighting with Git on your phone.
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/config_screen.jpeg" width="18%" alt="Configure Blog"/>
+  <img src="assets/post_list_screen.jpeg" width="18%" alt="Posts List"/>
+  <img src="assets/new_post_screen.jpeg" width="18%" alt="New Post"/>
+  <img src="assets/edit_post_screen.jpeg" width="18%" alt="Edit Post"/>
+  <img src="assets/preview_screen.jpeg" width="18%" alt="Preview"/>
+</p>
+
+<p align="center">
+  <sub>Configure → Browse Posts → Create → Write Markdown → Live Preview</sub>
+</p>
+
+## Disclaimer
+I use AI to help me code. But I review all the edits. 
+
 ## 📥 Download
 
 **[⬇️ Download Latest APK](https://github.com/ganeshapp/JekyllPress/releases/latest)**
