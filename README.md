@@ -22,7 +22,7 @@
 
 > Stop using VS Code to write blog posts. Stop fighting with Git on your phone.
 
-## 📸 Screenshots
+## Screenshots
 
 <p align="center">
   <img src="assets/config_screen.jpeg" width="18%" alt="Configure Blog"/>
@@ -39,9 +39,9 @@
 ## Disclaimer
 I use AI to help me code. But I review all the edits. 
 
-## 📥 Download
+## Download
 
-**[⬇️ Download Latest APK](https://github.com/ganeshapp/JekyllPress/releases/latest)**
+**[Download Latest APK](https://github.com/ganeshapp/JekyllPress/releases/latest)**
 
 | Build | Architecture | Size |
 |-------|--------------|------|
@@ -85,7 +85,7 @@ On mobile, it's even worse. The GitHub mobile app is designed for code review, n
 
 ---
 
-## 🛠️ Technical Architecture & Design Choices
+## Technical Architecture & Design Choices
 
 We made specific technical trade-offs to keep the app lightweight and fast.
 
@@ -111,7 +111,7 @@ We made specific technical trade-offs to keep the app lightweight and fast.
 
 ---
 
-## 🏗️ Tech Stack
+## Tech Stack
 
 * **Framework:** [Flutter](https://flutter.dev) (Android target)
 * **State Management:** [Riverpod](https://riverpod.dev)
@@ -121,7 +121,7 @@ We made specific technical trade-offs to keep the app lightweight and fast.
 
 ---
 
-## ⚡ Getting Started
+## Getting Started
 
 ### Prerequisites
 * A GitHub account.
@@ -142,19 +142,19 @@ We made specific technical trade-offs to keep the app lightweight and fast.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 This is an open-source project. We welcome PRs! 
 
 **Note on Security:** * Never commit your `client_secrets` or API keys.
 * The app stores the user's PAT in the device's secure keystore/keychain.
 
-## 👨‍💻 Author
+## Author
 
 **Gapp** — [www.gapp.in](https://www.gapp.in)
 
 Found a bug or have a feature request? [Open an issue](https://github.com/ganeshapp/JekyllPress/issues)!
 
-## 📄 License
+## License
 
 MIT — see [LICENSE](LICENSE) for details.
