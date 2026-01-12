@@ -192,28 +192,38 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
     state = DraftSaveStatus.saving;
 
     try {
-      _currentDraft = _currentDraft!.copyWith(
+      final updatedDraft = _currentDraft!.copyWith(
         title: title,
         bodyContent: bodyContent,
         lastModified: DateTime.now(),
       );
+      _currentDraft = updatedDraft;
 
       // Only save if there's meaningful content
-      if (_currentDraft!.hasContent) {
+      if (updatedDraft.hasContent) {
         final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
-        await draftsNotifier.saveDraft(_currentDraft!);
-        _lastSavedAt = _currentDraft!.lastModified;
+        await draftsNotifier.saveDraft(updatedDraft);
+        // Only update _lastSavedAt if _currentDraft wasn't cleared during await
+        if (_currentDraft != null) {
+          _lastSavedAt = updatedDraft.lastModified;
+        }
       }
 
-      state = DraftSaveStatus.saved;
+      // Only update state if not cleared during await
+      if (_currentDraft != null) {
+        state = DraftSaveStatus.saved;
       
-      // Reset to idle after a short delay
-      await Future.delayed(const Duration(seconds: 2));
-      if (state == DraftSaveStatus.saved) {
-        state = DraftSaveStatus.idle;
+        // Reset to idle after a short delay
+        await Future.delayed(const Duration(seconds: 2));
+        if (state == DraftSaveStatus.saved) {
+          state = DraftSaveStatus.idle;
+        }
       }
     } catch (e) {
-      state = DraftSaveStatus.error;
+      // Only set error state if not cleared
+      if (_currentDraft != null) {
+        state = DraftSaveStatus.error;
+      }
     }
   }
 
@@ -224,16 +234,20 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
   }) async {
     if (_currentDraft == null) return;
 
-    _currentDraft = _currentDraft!.copyWith(
+    final updatedDraft = _currentDraft!.copyWith(
       title: title,
       bodyContent: bodyContent,
       lastModified: DateTime.now(),
     );
+    _currentDraft = updatedDraft;
 
-    if (_currentDraft!.hasContent) {
+    if (updatedDraft.hasContent) {
       final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
-      await draftsNotifier.saveDraft(_currentDraft!);
-      _lastSavedAt = _currentDraft!.lastModified;
+      await draftsNotifier.saveDraft(updatedDraft);
+      // Only update _lastSavedAt if _currentDraft wasn't cleared during await
+      if (_currentDraft != null) {
+        _lastSavedAt = updatedDraft.lastModified;
+      }
     }
   }
 
