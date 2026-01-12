@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/blog_post.dart';
+import '../../../core/models/local_draft.dart';
 import '../../../core/providers/drafts_provider.dart';
 import '../../../core/providers/editor_provider.dart';
 import '../../../core/providers/image_provider.dart';
@@ -14,8 +15,9 @@ import '../../../core/theme/app_theme.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
   final BlogPost? post;
+  final LocalDraft? resumeDraft;
 
-  const EditorScreen({super.key, this.post});
+  const EditorScreen({super.key, this.post, this.resumeDraft});
 
   @override
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
@@ -28,7 +30,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   late TextEditingController _bodyController;
   final FocusNode _bodyFocusNode = FocusNode();
 
-  bool get isNewPost => widget.post == null;
+  bool get isNewPost => widget.post == null && 
+      (widget.resumeDraft == null || !widget.resumeDraft!.isEditingExisting);
   bool _isInitialized = false;
   bool _isPickingImage = false;
   
@@ -56,7 +59,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       _isInitialized = true;
       
       // Set up text controller values immediately (no provider modification)
-      if (widget.post != null) {
+      if (widget.resumeDraft != null) {
+        // Resuming a draft - use draft content
+        _titleController.text = widget.resumeDraft!.title;
+        _bodyController.text = widget.resumeDraft!.bodyContent;
+      } else if (widget.post != null) {
+        // Editing existing post
         _titleController.text = widget.post!.title;
         _bodyController.text = widget.post!.bodyContent;
       }
@@ -78,7 +86,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     
     final controller = ref.read(editorControllerProvider.notifier);
 
-    if (widget.post != null) {
+    if (widget.resumeDraft != null && widget.resumeDraft!.isEditingExisting) {
+      // Resuming a draft that was editing an existing post
+      controller.initializeWithPost(widget.post!);
+    } else if (widget.resumeDraft != null) {
+      // Resuming a draft for a new post - initialize as new
+      controller.initializeNewPost();
+      // Update with draft content
+      controller.updateTitle(widget.resumeDraft!.title);
+      controller.updateBody(widget.resumeDraft!.bodyContent);
+    } else if (widget.post != null) {
       controller.initializeWithPost(widget.post!);
     } else {
       controller.initializeNewPost();
@@ -90,7 +107,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     
     final draftNotifier = ref.read(currentDraftNotifierProvider.notifier);
     
-    if (widget.post != null) {
+    if (widget.resumeDraft != null) {
+      // Resuming an existing draft
+      draftNotifier.initializeWithDraft(widget.resumeDraft!);
+    } else if (widget.post != null) {
       // Editing existing post - check for existing draft
       draftNotifier.initializeForExistingPost(widget.post!);
     } else {

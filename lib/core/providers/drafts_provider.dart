@@ -49,8 +49,16 @@ class DraftsState {
 class DraftsNotifier extends _$DraftsNotifier {
   @override
   DraftsState build() {
-    _loadDrafts();
-    return const DraftsState(isLoading: true);
+    // Load drafts synchronously and return the result directly
+    try {
+      final box = ref.read(draftsBoxProvider);
+      final drafts = box.values.toList();
+      // Sort by last modified (newest first)
+      drafts.sort((a, b) => b.lastModified.compareTo(a.lastModified));
+      return DraftsState(drafts: drafts);
+    } catch (e) {
+      return DraftsState(error: 'Failed to load drafts: $e');
+    }
   }
 
   void _loadDrafts() {
