@@ -630,6 +630,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             child: TextField(
               controller: _titleController,
               enabled: isNewPost,
+              textCapitalization: TextCapitalization.words,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -713,6 +714,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               minLines: 15,
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.newline,
+              textCapitalization: TextCapitalization.sentences,
               style: const TextStyle(
                 fontSize: 15,
                 height: 1.6,
