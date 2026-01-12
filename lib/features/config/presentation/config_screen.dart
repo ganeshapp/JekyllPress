@@ -5,6 +5,7 @@ import '../../../core/models/github_repo.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/config_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import 'folder_browser_screen.dart';
 
 class ConfigScreen extends ConsumerStatefulWidget {
   const ConfigScreen({super.key});
@@ -364,6 +365,35 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     );
   }
 
+  Future<void> _openFolderBrowser() async {
+    if (_selectedRepo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a repository first'),
+          backgroundColor: Color(0xFFE8A87C),
+        ),
+      );
+      return;
+    }
+
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (context) => FolderBrowserScreen(
+          repoOwner: _selectedRepo!.ownerLogin,
+          repoName: _selectedRepo!.name,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        // If empty string (root), use a sensible default
+        _assetsPathController.text = result.isEmpty ? 'assets/images' : result;
+      });
+      HapticFeedback.selectionClick();
+    }
+  }
+
   Widget _buildAssetsPathInput() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,60 +403,102 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
           style: Theme.of(context).textTheme.labelLarge,
         ),
         const SizedBox(height: 8),
-        Container(
-          decoration: AppTheme.cardGlow,
-          child: TextFormField(
-            controller: _assetsPathController,
-            style: const TextStyle(
-              fontSize: 15,
-              fontFamily: 'monospace',
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: AppTheme.cardGlow,
+                child: TextFormField(
+                  controller: _assetsPathController,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontFamily: 'monospace',
+                  ),
+                  decoration: InputDecoration(
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 16, right: 12),
+                      child: Icon(
+                        Icons.image_rounded,
+                        color: Color(0xFFE8A87C),
+                        size: 22,
+                      ),
+                    ),
+                    hintText: 'assets/images',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: const Color(0xFF2D4A3E).withAlpha(80),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Color(0xFFE8A87C),
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF162A1E),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter the assets path';
+                    }
+                    // Remove leading/trailing slashes for validation
+                    final cleaned = value.trim().replaceAll(RegExp(r'^/|/$'), '');
+                    if (cleaned.isEmpty) {
+                      return 'Invalid path';
+                    }
+                    return null;
+                  },
+                ),
+              ),
             ),
-            decoration: InputDecoration(
-              prefixIcon: const Padding(
-                padding: EdgeInsets.only(left: 16, right: 12),
-                child: Icon(
-                  Icons.image_rounded,
-                  color: Color(0xFFE8A87C),
-                  size: 22,
+            const SizedBox(width: 12),
+            Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFE8A87C).withAlpha(20),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: const Color(0xFF1A2F23),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: _openFolderBrowser,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFFE8A87C).withAlpha(60),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.folder_open_rounded,
+                      color: Color(0xFFE8A87C),
+                      size: 24,
+                    ),
+                  ),
                 ),
               ),
-              hintText: 'assets/images',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: const Color(0xFF2D4A3E).withAlpha(80),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Color(0xFFE8A87C),
-                  width: 2,
-                ),
-              ),
-              filled: true,
-              fillColor: const Color(0xFF162A1E),
             ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter the assets path';
-              }
-              // Remove leading/trailing slashes for validation
-              final cleaned = value.trim().replaceAll(RegExp(r'^/|/$'), '');
-              if (cleaned.isEmpty) {
-                return 'Invalid path';
-              }
-              return null;
-            },
-          ),
+          ],
         ),
         const SizedBox(height: 8),
         Text(
-          'Folder where images will be uploaded (relative to repo root).',
+          'Folder where images will be uploaded. Tap the folder icon to browse.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 12,
               ),
