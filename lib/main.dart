@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/models/app_config.dart';
 import 'core/models/blog_post.dart';
+import 'core/models/local_draft.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_wrapper.dart';
 
@@ -17,11 +18,13 @@ void main() async {
   // Register Hive adapters
   Hive.registerAdapter(AppConfigAdapter());
   Hive.registerAdapter(BlogPostAdapter());
+  Hive.registerAdapter(LocalDraftAdapter());
 
   // Open Hive boxes
   await Hive.openBox<AppConfig>('app_config');
   await Hive.openBox<BlogPost>('posts_box');
   await Hive.openBox<String>('local_image_map');
+  await Hive.openBox<LocalDraft>('drafts_box');
 
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
