@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/blog_post.dart';
+import '../../../core/providers/drafts_provider.dart';
 import '../../../core/providers/editor_provider.dart';
 import '../../../core/providers/image_provider.dart';
 import '../../../core/providers/posts_provider.dart';
@@ -20,7 +22,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   late TextEditingController _titleController;
   late TextEditingController _bodyController;
@@ -29,6 +31,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   bool get isNewPost => widget.post == null;
   bool _isInitialized = false;
   bool _isPickingImage = false;
+  
+  // Auto-save debounce timer
+  Timer? _autoSaveTimer;
+  static const _autoSaveDelay = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -38,6 +44,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _bodyController = TextEditingController();
 
     _tabController.addListener(_onTabChanged);
+    
+    // Register lifecycle observer for saving on background
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -59,6 +68,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       // Delay provider modification until after build completes
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initializeEditorProvider();
+        _initializeDraftProvider();
       });
     }
   }
@@ -75,12 +85,66 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  void _initializeDraftProvider() {
+    if (!mounted) return;
+    
+    final draftNotifier = ref.read(currentDraftNotifierProvider.notifier);
+    
+    if (widget.post != null) {
+      // Editing existing post - check for existing draft
+      draftNotifier.initializeForExistingPost(widget.post!);
+    } else {
+      // New post - create new draft
+      draftNotifier.initializeNewDraft();
+    }
+  }
+  
+  /// Handle app lifecycle changes - save on background
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.paused || 
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      // App is going to background - save immediately
+      _saveImmediately();
+    }
+  }
+  
+  /// Save draft immediately (bypasses debounce)
+  Future<void> _saveImmediately() async {
+    _autoSaveTimer?.cancel();
+    
+    final draftNotifier = ref.read(currentDraftNotifierProvider.notifier);
+    await draftNotifier.forceSave(
+      title: _titleController.text,
+      bodyContent: _bodyController.text,
+    );
+  }
+  
+  /// Trigger debounced auto-save
+  void _triggerAutoSave() {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(_autoSaveDelay, () {
+      if (mounted) {
+        final draftNotifier = ref.read(currentDraftNotifierProvider.notifier);
+        draftNotifier.updateAndSave(
+          title: _titleController.text,
+          bodyContent: _bodyController.text,
+        );
+      }
+    });
+  }
+
   void _onTitleChanged() {
     ref.read(editorControllerProvider.notifier).updateTitle(_titleController.text);
+    _triggerAutoSave();
   }
 
   void _onBodyChanged() {
     ref.read(editorControllerProvider.notifier).updateBody(_bodyController.text);
+    _triggerAutoSave();
   }
 
   void _onTabChanged() {
@@ -93,6 +157,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   @override
   void dispose() {
+    // Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+    
+    // Cancel auto-save timer
+    _autoSaveTimer?.cancel();
+    
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _titleController.removeListener(_onTitleChanged);
@@ -103,44 +173,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     super.dispose();
   }
 
-  Future<bool> _onWillPop() async {
-    final editorState = ref.read(editorControllerProvider);
-    if (editorState.hasUnsavedChanges) {
-      final shouldDiscard = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1A2F23),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+  /// Handle back navigation - auto-save to drafts, no discard prompt
+  Future<void> _handleBack() async {
+    // Cancel any pending auto-save
+    _autoSaveTimer?.cancel();
+    
+    // Save current state to drafts before closing
+    await _saveImmediately();
+    
+    // Clear editor state
+    ref.read(editorControllerProvider.notifier).clear();
+    ref.read(currentDraftNotifierProvider.notifier).clear();
+    
+    if (mounted) {
+      // Show a subtle confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.save_rounded, color: Color(0xFF81C784), size: 18),
+              SizedBox(width: 12),
+              Text('Draft saved'),
+            ],
           ),
-          title: const Text('Discard Changes?'),
-          content: const Text(
-            'You have unsaved changes. Are you sure you want to leave?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Keep Editing'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFE57373),
-              ),
-              child: const Text('Discard'),
-            ),
-          ],
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 1),
+          backgroundColor: Color(0xFF1A2F23),
         ),
       );
-      return shouldDiscard ?? false;
-    }
-    return true;
-  }
-
-  void _handleBack() async {
-    if (await _onWillPop()) {
-      ref.read(editorControllerProvider.notifier).clear();
-      if (mounted) Navigator.of(context).pop();
+      Navigator.of(context).pop();
     }
   }
 
@@ -183,11 +244,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
 
       if (success && mounted) {
-        // Clear editor state
+        // Clear editor state and delete draft
         ref.read(editorControllerProvider.notifier).clear();
+        await ref.read(currentDraftNotifierProvider.notifier).clearAfterPublish();
         
-        // Refresh posts list
+        // Refresh posts list and drafts
         ref.read(postsNotifierProvider.notifier).refresh();
+        ref.read(draftsNotifierProvider.notifier).refresh();
 
         // Show success message
         final publishState = ref.read(publishNotifierProvider);
@@ -324,7 +387,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handleBack();
       },
@@ -355,6 +418,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   Widget _buildAppBar(EditorState editorState) {
+    final saveStatus = ref.watch(currentDraftNotifierProvider);
+    
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
       child: Row(
@@ -372,34 +437,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
             ),
           ),
-          if (editorState.hasUnsavedChanges)
-            Container(
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8A87C).withAlpha(30),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.edit_rounded,
-                    size: 12,
-                    color: Color(0xFFE8A87C),
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    'Unsaved',
-                    style: TextStyle(
-                      color: Color(0xFFE8A87C),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // Save status indicator
+          _buildSaveStatusIndicator(saveStatus, editorState.hasUnsavedChanges),
+          const SizedBox(width: 12),
           ElevatedButton(
             onPressed: _isPublishing ? null : _handleSave,
             style: ElevatedButton.styleFrom(
@@ -422,6 +462,76 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       Text('Publish'),
                     ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveStatusIndicator(DraftSaveStatus status, bool hasUnsavedChanges) {
+    IconData icon;
+    String text;
+    Color color;
+    bool showSpinner = false;
+
+    switch (status) {
+      case DraftSaveStatus.saving:
+        icon = Icons.sync_rounded;
+        text = 'Saving...';
+        color = const Color(0xFFE8A87C);
+        showSpinner = true;
+        break;
+      case DraftSaveStatus.saved:
+        icon = Icons.check_circle_rounded;
+        text = 'Saved';
+        color = const Color(0xFF81C784);
+        break;
+      case DraftSaveStatus.error:
+        icon = Icons.error_outline_rounded;
+        text = 'Error';
+        color = const Color(0xFFE57373);
+        break;
+      case DraftSaveStatus.idle:
+        if (hasUnsavedChanges) {
+          icon = Icons.edit_rounded;
+          text = 'Editing';
+          color = const Color(0xFFA8B5A0);
+        } else {
+          // Nothing to show when idle and no changes
+          return const SizedBox.shrink();
+        }
+        break;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(25),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showSpinner)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: color,
+              ),
+            )
+          else
+            Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
