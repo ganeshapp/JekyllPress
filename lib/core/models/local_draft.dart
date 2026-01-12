@@ -96,7 +96,11 @@ class LocalDraft extends HiveObject {
   }
 
   /// Whether this is editing an existing post vs a new one
-  bool get isEditingExisting => originalSha != null && originalFileName != null;
+  bool get isEditingExisting =>
+      originalSha != null &&
+      originalSha!.isNotEmpty &&
+      originalFileName != null &&
+      originalFileName!.isNotEmpty;
 
   /// Update the draft content
   LocalDraft copyWith({
