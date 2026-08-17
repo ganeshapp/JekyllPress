@@ -314,4 +314,54 @@ void main() {
     expect(publish.createdTitles, isEmpty);
     expect(queueBox.containsKey('q1'), isTrue);
   });
+
+  // Regression: logout / repository change wipes the repo-scoped local
+  // data. A queued item carries its own body and publishes against
+  // whatever config is active when it flushes, so anything left behind
+  // would push the previous repository's post into the next one.
+  group('clearAll (logout / repository change)', () {
+    test('empties the box and the state', () async {
+      await notifier().enqueue(_item('q1'));
+      await notifier().enqueue(_item('q2'));
+      expect(container.read(publishQueueNotifierProvider), hasLength(2));
+
+      await notifier().clearAll();
+
+      expect(container.read(publishQueueNotifierProvider), isEmpty);
+      expect(queueBox.isEmpty, isTrue);
+    });
+
+    test('a cleared queue never publishes on the next flush', () async {
+      await notifier().enqueue(_item('q1'));
+      await notifier().clearAll();
+
+      await notifier().processQueue(manual: true);
+      connectivity.controller.add(const [ConnectivityResult.wifi]);
+      await _settle();
+
+      expect(publish.createdTitles, isEmpty);
+    });
+
+    // The API above is only useful if the wipe path actually calls it.
+    // Driving the real logout flow needs the whole auth/config/network
+    // stack, so assert the wiring at the source level instead.
+    test('the dashboard local-data wipe calls it', () {
+      const path =
+          'lib/features/dashboard/presentation/dashboard_screen.dart';
+      final src = File(path).readAsStringSync();
+
+      final start = src.indexOf('Future<void> _clearLocalData() async {');
+      expect(start, isNot(-1), reason: '$path must define _clearLocalData');
+      final body = src.substring(start, src.indexOf('\n  }', start));
+
+      expect(
+        body,
+        contains('publishQueueNotifierProvider'),
+        reason: '_clearLocalData must also wipe the offline publish queue, '
+            'or a post queued for the previous repository flushes into the '
+            'next one',
+      );
+      expect(body, contains('clearAll()'));
+    });
+  });
 }

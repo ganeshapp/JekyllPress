@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/app_config.dart';
 import '../../../core/models/blog_post.dart';
@@ -12,10 +13,12 @@ import '../../../core/providers/image_provider.dart';
 import '../../../core/providers/posts_provider.dart';
 import '../../../core/providers/publish_provider.dart';
 import '../../../core/providers/queue_provider.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/frontmatter_parser.dart';
 import '../../../core/utils/permalink.dart';
+import '../../../l10n/l10n.dart';
 import '../../about/presentation/about_screen.dart';
 import '../../config/presentation/config_screen.dart';
 import '../../editor/presentation/editor_screen.dart';
@@ -183,26 +186,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Unpublished Edits'),
+        title: Text(context.l10n.unpublishedEditsTitle),
         content: Text(
-          'You have unpublished edits for this post '
-          '(last modified ${_formatTimeAgo(draft.lastModified)}).',
+          context.l10n
+              .unpublishedEditsBody(_formatTimeAgo(draft.lastModified)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Discard edits'),
+            child: Text(context.l10n.discardEdits),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Resume my edits'),
+            child: Text(context.l10n.resumeMyEdits),
           ),
         ],
       ),
@@ -224,7 +223,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     return Scaffold(
       body: Container(
-        decoration: AppTheme.backgroundGradient,
+        decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeIn,
@@ -285,27 +284,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         controller: _searchController,
         autofocus: true,
         onChanged: (value) => setState(() => _searchQuery = value),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
-          color: Color(0xFFF5F5F0),
+          color: context.colorScheme.onSurface,
         ),
         decoration: InputDecoration(
-          hintText: 'Search posts and drafts...',
+          hintText: context.l10n.searchPostsHint,
           hintStyle: TextStyle(
             fontSize: 14,
-            color: const Color(0xFFA8B5A0).withAlpha(150),
+            color: context.colorScheme.onSurfaceVariant.withAlpha(150),
           ),
-          prefixIcon: const Icon(
+          prefixIcon: Icon(
             Icons.search_rounded,
             size: 20,
-            color: Color(0xFFA8B5A0),
+            color: context.colorScheme.onSurfaceVariant,
           ),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.close_rounded,
                     size: 18,
-                    color: Color(0xFFA8B5A0),
+                    color: context.colorScheme.onSurfaceVariant,
                   ),
                   onPressed: () {
                     _searchController.clear();
@@ -314,7 +313,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 )
               : null,
           filled: true,
-          fillColor: const Color(0xFF162A1E),
+          fillColor: context.colorScheme.surfaceContainer,
           isDense: true,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -325,13 +324,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
-              color: const Color(0xFF2D4A3E).withAlpha(80),
+              color: context.colorScheme.outline.withAlpha(80),
             ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: Color(0xFFE8A87C),
+            borderSide: BorderSide(
+              color: context.colorScheme.primary,
               width: 2,
             ),
           ),
@@ -344,23 +343,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF162A1E),
+        color: context.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF2D4A3E).withAlpha(80),
+          color: context.colorScheme.outline.withAlpha(80),
         ),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: const Color(0xFFE8A87C),
+          color: context.colorScheme.primary,
           borderRadius: BorderRadius.circular(10),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         indicatorPadding: const EdgeInsets.all(4),
         dividerColor: Colors.transparent,
-        labelColor: const Color(0xFF0D1B14),
-        unselectedLabelColor: const Color(0xFFA8B5A0),
+        labelColor: context.colorScheme.onPrimary,
+        unselectedLabelColor: context.colorScheme.onSurfaceVariant,
         labelStyle: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
@@ -370,13 +369,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           fontWeight: FontWeight.w500,
         ),
         tabs: [
-          const Tab(
+          Tab(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.cloud_done_rounded, size: 18),
-                SizedBox(width: 8),
-                Text('Published'),
+                const Icon(Icons.cloud_done_rounded, size: 18),
+                const SizedBox(width: 8),
+                Text(context.l10n.tabPublished),
               ],
             ),
           ),
@@ -386,13 +385,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               children: [
                 const Icon(Icons.edit_note_rounded, size: 18),
                 const SizedBox(width: 8),
-                const Text('Drafts'),
+                Text(context.l10n.tabDrafts),
                 if (draftsCount > 0) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8A87C).withAlpha(40),
+                      color: context.colorScheme.primary.withAlpha(40),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -431,14 +430,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: const Color(0xFFE8A87C).withAlpha(50),
+                  color: context.colorScheme.primary.withAlpha(50),
                   width: 2,
                 ),
               ),
               child: CircleAvatar(
                 radius: 20,
                 backgroundImage: NetworkImage(user.avatarUrl),
-                backgroundColor: const Color(0xFF2D4A3E),
+                backgroundColor: context.colorScheme.outline,
               ),
             ),
           const SizedBox(width: 14),
@@ -450,7 +449,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   children: [
                     Flexible(
                       child: Text(
-                        config?.repoName ?? 'Blog',
+                        config?.repoName ?? context.l10n.blogFallbackTitle,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -459,12 +458,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                     if (isRefreshing) ...[
                       const SizedBox(width: 10),
-                      const SizedBox(
+                      SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Color(0xFFE8A87C),
+                          color: context.colorScheme.primary,
                         ),
                       ),
                     ],
@@ -475,7 +474,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     syncLabel,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontSize: 12,
-                          color: const Color(0xFFE8A87C),
+                          color: context.colorScheme.primary,
                         ),
                   )
                 else if (config != null)
@@ -493,64 +492,72 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               _isSearching ? Icons.search_off_rounded : Icons.search_rounded,
             ),
             color:
-                _isSearching ? const Color(0xFFE8A87C) : const Color(0xFFA8B5A0),
-            tooltip: 'Search posts',
+                _isSearching ? context.colorScheme.primary : context.colorScheme.onSurfaceVariant,
+            tooltip: context.l10n.searchPostsTooltip,
             onPressed: _toggleSearch,
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            color: const Color(0xFFA8B5A0),
+            color: context.colorScheme.onSurfaceVariant,
+            tooltip: context.l10n.refreshPostsTooltip,
             onPressed: _onRefresh,
           ),
           PopupMenuButton<String>(
-            icon: const Icon(
+            icon: Icon(
               Icons.more_vert_rounded,
-              color: Color(0xFFA8B5A0),
+              color: context.colorScheme.onSurfaceVariant,
             ),
-            color: const Color(0xFF1A2F23),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            tooltip: context.l10n.moreOptionsTooltip,
             itemBuilder: (context) => [
               if (config != null && config.siteUrl.isNotEmpty)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'open_site',
                   child: Row(
                     children: [
-                      Icon(Icons.open_in_new_rounded, size: 20),
-                      SizedBox(width: 12),
-                      Text('Open site'),
+                      const Icon(Icons.open_in_new_rounded, size: 20),
+                      const SizedBox(width: 12),
+                      Text(context.l10n.menuOpenSite),
                     ],
                   ),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'change_repo',
                 child: Row(
                   children: [
-                    Icon(Icons.swap_horiz_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text('Change Repository'),
+                    const Icon(Icons.swap_horiz_rounded, size: 20),
+                    const SizedBox(width: 12),
+                    Text(context.l10n.menuChangeRepository),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
+                value: 'theme',
+                child: Row(
+                  children: [
+                    const Icon(Icons.brightness_6_rounded, size: 20),
+                    const SizedBox(width: 12),
+                    Text(context.l10n.themeLabel),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
                 value: 'about',
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text('About'),
+                    const Icon(Icons.info_outline_rounded, size: 20),
+                    const SizedBox(width: 12),
+                    Text(context.l10n.aboutLabel),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [
-                    Icon(Icons.logout_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text('Logout'),
+                    const Icon(Icons.logout_rounded, size: 20),
+                    const SizedBox(width: 12),
+                    Text(context.l10n.logoutLabel),
                   ],
                 ),
               ),
@@ -562,6 +569,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 if (config != null) await _openRepositorySettings(config);
               } else if (value == 'open_site') {
                 if (config != null) _launchExternal(config.siteUrl);
+              } else if (value == 'theme') {
+                await _showThemePicker();
               } else if (value == 'about') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -576,6 +585,43 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
+  /// Manual theme override: system (follow Android), light, or dark.
+  /// Persisted via [ThemeModeNotifier] so it survives restarts.
+  Future<void> _showThemePicker() async {
+    final current = ref.read(themeModeNotifierProvider);
+    final selected = await showDialog<ThemeMode>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(context.l10n.themeLabel),
+        children: [
+          for (final (mode, label, icon) in [
+            (
+              ThemeMode.system,
+              context.l10n.themeSystemDefault,
+              Icons.brightness_auto_rounded
+            ),
+            (ThemeMode.light, context.l10n.themeLight, Icons.light_mode_rounded),
+            (ThemeMode.dark, context.l10n.themeDark, Icons.dark_mode_rounded),
+          ])
+            ListTile(
+              leading: Icon(icon),
+              title: Text(label),
+              trailing: mode == current
+                  ? Icon(
+                      Icons.check_rounded,
+                      color: context.colorScheme.primary,
+                    )
+                  : null,
+              selected: mode == current,
+              onTap: () => Navigator.pop(context, mode),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || selected == current) return;
+    await ref.read(themeModeNotifierProvider.notifier).setMode(selected);
+  }
+
   /// Confirm and perform logout: clears the token and ALL local data
   /// (posts cache, drafts, image map, local images) so nothing leaks to
   /// the next account on this device
@@ -583,26 +629,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Logout?'),
-        content: const Text(
-          'This removes your token and clears all cached posts, drafts, '
-          'and images from this device.',
-        ),
+        title: Text(context.l10n.logoutDialogTitle),
+        content: Text(context.l10n.logoutDialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Logout'),
+            child: Text(context.l10n.logoutLabel),
           ),
         ],
       ),
@@ -646,8 +685,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     if (postsState is PostsLoaded &&
         postsState.isRefreshing &&
         postsState.syncTotal != null) {
-      return 'Syncing ${postsState.syncDone ?? 0} of '
-          '${postsState.syncTotal}...';
+      return context.l10n
+          .syncingProgress(postsState.syncDone ?? 0, postsState.syncTotal!);
     }
     return null;
   }
@@ -671,17 +710,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   fontWeight: FontWeight.w600,
                   fontFamily: 'monospace',
                   color: dir == config.activeContentDir
-                      ? const Color(0xFF0D1B14)
-                      : const Color(0xFFA8B5A0),
+                      ? context.colorScheme.onPrimary
+                      : context.colorScheme.onSurfaceVariant,
                 ),
                 selected: dir == config.activeContentDir,
-                selectedColor: const Color(0xFFE8A87C),
-                backgroundColor: const Color(0xFF162A1E),
+                selectedColor: context.colorScheme.primary,
+                backgroundColor: context.colorScheme.surfaceContainer,
                 showCheckmark: false,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                   side: BorderSide(
-                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                    color: context.colorScheme.outline.withAlpha(80),
                   ),
                 ),
                 onSelected: (_) => _switchContentDir(config, dir),
@@ -699,9 +738,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     await ref.read(postsNotifierProvider.notifier).refresh();
   }
 
-  /// Wipe all repo/account-scoped local data: posts cache, drafts,
-  /// the local image map, and the local images directory
+  /// Wipe all repo/account-scoped local data: the offline publish queue,
+  /// posts cache, drafts, the local image map, and the local images
+  /// directory
   Future<void> _clearLocalData() async {
+    // Queue first: a queued item carries its own body and publishes
+    // against whatever config is active when it flushes, so leaving it
+    // behind would push the previous repo's post into the next one
+    await ref.read(publishQueueNotifierProvider.notifier).clearAll();
     await ref.read(postsNotifierProvider.notifier).clearAll();
     await ref.read(draftsNotifierProvider.notifier).clearAll();
     await ref.read(localImageMapBoxProvider).clear();
@@ -765,21 +809,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 40,
             height: 40,
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              color: Color(0xFFE8A87C),
+              color: context.colorScheme.primary,
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            label ?? 'Loading posts...',
-            style: const TextStyle(
-              color: Color(0xFFA8B5A0),
-              fontSize: 14,
-            ),
+            label ?? context.l10n.loadingPosts,
+            style: context.textTheme.bodyMedium,
           ),
         ],
       ),
@@ -796,18 +837,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFFE57373).withAlpha(20),
+                color: context.colorScheme.error.withAlpha(20),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.cloud_off_rounded,
                 size: 48,
-                color: Color(0xFFE57373),
+                color: context.colorScheme.error,
               ),
             ),
             const SizedBox(height: 20),
             Text(
-              'Failed to load posts',
+              context.l10n.failedToLoadPosts,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -820,7 +861,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             ElevatedButton.icon(
               onPressed: _onRefresh,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Retry'),
+              label: Text(context.l10n.commonRetry),
             ),
           ],
         ),
@@ -840,8 +881,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      color: const Color(0xFFE8A87C),
-      backgroundColor: const Color(0xFF1A2F23),
+      color: context.colorScheme.primary,
+      backgroundColor: context.colorScheme.surfaceContainerHigh,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         itemCount: posts.length + (hasHeader ? 1 : 0),
@@ -873,7 +914,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   Widget _buildPublishedPostCard(BlogPost post, AppConfig? config) {
-    final canAct = !post.isLocalDraft && post.sha != null;
+    final canAct = post.sha != null;
     return PostCard(
       post: post,
       onTap: () => _navigateToEditor(post),
@@ -906,20 +947,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Icon(
             Icons.search_off_rounded,
             size: 56,
-            color: const Color(0xFFA8B5A0).withAlpha(120),
+            color: context.colorScheme.onSurfaceVariant.withAlpha(120),
           ),
           const SizedBox(height: 16),
           Text(
-            'No posts match',
+            context.l10n.noPostsMatch,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFFF5F5F0),
+                  color: context.colorScheme.onSurface,
                 ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Try a different search',
+            context.l10n.tryDifferentSearch,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFA8B5A0),
+                  color: context.colorScheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -937,7 +978,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open $url'),
+            content: Text(context.l10n.couldNotOpenUrl(url)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -965,30 +1006,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   /// Confirm, then delete the post's file from GitHub and drop it from
   /// the cache/state
   Future<void> _confirmDeleteFromGitHub(BlogPost post) async {
-    final fileName = post.fileName ?? post.filePath ?? 'this post';
+    final fileName =
+        post.fileName ?? post.filePath ?? context.l10n.thisPostFallback;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Delete from GitHub?'),
-        content: Text(
-          'This deletes "$fileName" from the repository. '
-          'This cannot be undone from the app.',
-        ),
+        title: Text(context.l10n.deleteFromGitHubTitle),
+        content: Text(context.l10n.deleteFromGitHubBody(fileName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Delete'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -1005,7 +1040,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Deleted $fileName'),
+          content: Text(context.l10n.deletedFile(fileName)),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -1013,9 +1048,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error),
+          // Background is overridden, so the text colour must come from the
+          // matching `on` role (the theme default is onSurface, which is
+          // unreadable on `error` in light mode)
+          content: Text(
+            error,
+            style: TextStyle(color: context.colorScheme.onError),
+          ),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFE57373),
+          backgroundColor: context.colorScheme.error,
         ),
       );
     }
@@ -1025,28 +1066,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   Future<void> _confirmPromoteDraft(BlogPost draft) async {
     final config = ref.read(configNotifierProvider.notifier).currentConfig;
     if (config == null) return;
-    final fileName = draft.fileName ?? 'this draft';
+    final fileName = draft.fileName ?? context.l10n.thisDraftFallback;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Promote to post?'),
-        content: Text(
-          'This moves "$fileName" from ${config.draftsPath} to '
-          '${config.activeContentDir} and publishes it with today\'s date.',
-        ),
+        title: Text(context.l10n.promoteDialogTitle),
+        content: Text(context.l10n.promoteDialogBody(
+          fileName,
+          config.draftsPath,
+          config.activeContentDir,
+        )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Promote'),
+            child: Text(context.l10n.promoteAction),
           ),
         ],
       ),
@@ -1060,18 +1098,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     if (error == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Draft promoted to post'),
+        SnackBar(
+          content: Text(context.l10n.draftPromotedToPost),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error),
+          // Background is overridden, so the text colour must come from the
+          // matching `on` role (the theme default is onSurface, which is
+          // unreadable on `error` in light mode)
+          content: Text(
+            error,
+            style: TextStyle(color: context.colorScheme.onError),
+          ),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFE57373),
+          backgroundColor: context.colorScheme.error,
         ),
       );
     }
@@ -1083,32 +1127,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE57373).withAlpha(20),
+        color: context.colorScheme.error.withAlpha(20),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE57373).withAlpha(50),
+          color: context.colorScheme.error.withAlpha(50),
         ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.sync_problem_rounded,
-            color: Color(0xFFE57373),
+            color: context.colorScheme.error,
             size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Sync failed - showing cached data',
+              context.l10n.syncFailedShowingCached,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFE57373),
+                    color: context.colorScheme.error,
                     fontSize: 13,
                   ),
             ),
           ),
           TextButton(
             onPressed: _onRefresh,
-            child: const Text('Retry'),
+            child: Text(context.l10n.commonRetry),
           ),
         ],
       ),
@@ -1119,10 +1163,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
-        'Last synced ${_formatTimeAgo(lastSynced).toLowerCase()}',
-        style: const TextStyle(
+        context.l10n.lastSyncedCaption(_formatTimeAgo(lastSynced)),
+        style: TextStyle(
           fontSize: 11,
-          color: Color(0xFFA8B5A0),
+          color: context.colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -1139,10 +1183,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8A87C).withAlpha(20),
+        color: context.colorScheme.primary.withAlpha(20),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE8A87C).withAlpha(50),
+          color: context.colorScheme.primary.withAlpha(50),
         ),
       ),
       child: Column(
@@ -1150,21 +1194,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.schedule_send_rounded,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
                 size: 20,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   waitingCount > 0
-                      ? '$waitingCount post${waitingCount == 1 ? '' : 's'} '
-                          'waiting to publish'
-                      : '${failed.length} queued '
-                          'post${failed.length == 1 ? '' : 's'} failed',
+                      ? context.l10n.queueWaitingCount(waitingCount)
+                      : context.l10n.queueFailedCount(failed.length),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFFE8A87C),
+                        color: context.colorScheme.primary,
                         fontSize: 13,
                       ),
                 ),
@@ -1176,7 +1218,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       .read(publishQueueNotifierProvider.notifier)
                       .processQueue(manual: true);
                 },
-                child: const Text('Publish now'),
+                child: Text(context.l10n.publishNow),
               ),
             ],
           ),
@@ -1184,24 +1226,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             InkWell(
               onTap: () => _reopenQueuedItem(item),
               borderRadius: BorderRadius.circular(8),
-              child: Padding(
+              child: Semantics(
+                button: true,
+                label: context.l10n.failedQueueItemSemantics(
+                  item.title.isEmpty ? context.l10n.commonUntitled : item.title,
+                ),
+                child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline_rounded,
-                      color: Color(0xFFE57373),
+                      color: context.colorScheme.error,
                       size: 16,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Couldn\'t publish '
-                        '"${item.title.isEmpty ? 'Untitled' : item.title}"'
-                        ' - tap to edit',
-                        style: const TextStyle(
+                        context.l10n.couldNotPublishTapToEdit(
+                          item.title.isEmpty
+                              ? context.l10n.commonUntitled
+                              : item.title,
+                        ),
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFFE57373),
+                          color: context.colorScheme.error,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1209,6 +1258,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                   ],
                 ),
+              ),
               ),
             ),
         ],
@@ -1253,13 +1303,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   Widget _buildFAB() {
     return FloatingActionButton.extended(
       onPressed: () => _navigateToEditor(),
-      backgroundColor: const Color(0xFFE8A87C),
-      foregroundColor: const Color(0xFF0D1B14),
+      backgroundColor: context.colorScheme.primary,
+      foregroundColor: context.colorScheme.onPrimary,
       elevation: 4,
       icon: const Icon(Icons.add_rounded),
-      label: const Text(
-        'New Post',
-        style: TextStyle(fontWeight: FontWeight.w600),
+      label: Text(
+        context.l10n.newPostAction,
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1272,9 +1322,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     AppConfig? config,
   ) {
     if (draftsState.isLoading) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(
-          color: Color(0xFFE8A87C),
+          color: context.colorScheme.primary,
         ),
       );
     }
@@ -1297,8 +1347,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         ref.read(draftsNotifierProvider.notifier).refresh();
         await ref.read(postsNotifierProvider.notifier).refresh();
       },
-      color: const Color(0xFFE8A87C),
-      backgroundColor: const Color(0xFF1A2F23),
+      color: context.colorScheme.primary,
+      backgroundColor: context.colorScheme.surfaceContainerHigh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -1306,14 +1356,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           if (visibleRemote.isNotEmpty) ...[
             _buildDraftsSectionHeader(
               Icons.cloud_queue_rounded,
-              'On GitHub (${config?.draftsPath ?? '_drafts'})',
+              context.l10n
+                  .draftsOnGitHubSection(config?.draftsPath ?? '_drafts'),
             ),
             for (final draft in visibleRemote) _buildRemoteDraftCard(draft),
           ],
           if (visibleLocal.isNotEmpty) ...[
             _buildDraftsSectionHeader(
               Icons.smartphone_rounded,
-              'On this device',
+              context.l10n.draftsOnDeviceSection,
             ),
             for (final draft in visibleLocal) _buildDraftCard(draft),
           ],
@@ -1340,16 +1391,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Icon(
             icon,
             size: 14,
-            color: const Color(0xFFA8B5A0).withAlpha(180),
+            color: context.colorScheme.onSurfaceVariant.withAlpha(180),
           ),
           const SizedBox(width: 8),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
-              color: Color(0xFFA8B5A0),
+              color: context.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1365,27 +1416,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF2D4A3E).withAlpha(30),
+              color: context.colorScheme.outline.withAlpha(30),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Icon(
               Icons.drafts_rounded,
               size: 56,
-              color: const Color(0xFFA8B5A0).withAlpha(120),
+              color: context.colorScheme.onSurfaceVariant.withAlpha(120),
             ),
           ),
           const SizedBox(height: 20),
           Text(
-            'No drafts yet',
+            context.l10n.noDraftsYet,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFFF5F5F0),
+                  color: context.colorScheme.onSurface,
                 ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Your unsaved posts will appear here',
+            context.l10n.draftsEmptyBody,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFA8B5A0),
+                  color: context.colorScheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -1407,10 +1458,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF162A1E),
+              color: context.colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFF2D4A3E).withAlpha(80),
+                color: context.colorScheme.outline.withAlpha(80),
               ),
             ),
             child: Column(
@@ -1418,70 +1469,76 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isEditingExisting
-                            ? const Color(0xFF4DB6AC).withAlpha(30)
-                            : const Color(0xFFE8A87C).withAlpha(30),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isEditingExisting ? Icons.edit_rounded : Icons.fiber_new_rounded,
-                            size: 12,
-                            color: isEditingExisting
-                                ? const Color(0xFF4DB6AC)
-                                : const Color(0xFFE8A87C),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isEditingExisting ? 'Editing' : 'New',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                    Semantics(
+                      label: isEditingExisting
+                          ? context.l10n.draftStatusEditingSemantics
+                          : context.l10n.draftStatusNewSemantics,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isEditingExisting
+                              ? context.appColors.info.withAlpha(30)
+                              : context.colorScheme.primary.withAlpha(30),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isEditingExisting ? Icons.edit_rounded : Icons.fiber_new_rounded,
+                              size: 12,
                               color: isEditingExisting
-                                  ? const Color(0xFF4DB6AC)
-                                  : const Color(0xFFE8A87C),
+                                  ? context.appColors.info
+                                  : context.colorScheme.primary,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              isEditingExisting
+                                  ? context.l10n.editingStatus
+                                  : context.l10n.newStatus,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isEditingExisting
+                                    ? context.appColors.info
+                                    : context.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const Spacer(),
                     Text(
                       timeAgo,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFFA8B5A0),
+                        color: context.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Delete button
-                    GestureDetector(
-                      onTap: () => _confirmDeleteDraft(draft),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          size: 18,
-                          color: Color(0xFFA8B5A0),
-                        ),
+                    // Delete button (48dp tap target + label for TalkBack)
+                    IconButton(
+                      onPressed: () => _confirmDeleteDraft(draft),
+                      tooltip: context.l10n.deleteDraftTooltip,
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: context.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  draft.title.isEmpty ? 'Untitled' : draft.title,
+                  draft.title.isEmpty
+                      ? context.l10n.commonUntitled
+                      : draft.title,
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                     color: draft.title.isEmpty
-                        ? const Color(0xFFA8B5A0)
-                        : const Color(0xFFF5F5F0),
+                        ? context.colorScheme.onSurfaceVariant
+                        : context.colorScheme.onSurface,
                     fontStyle: draft.title.isEmpty ? FontStyle.italic : FontStyle.normal,
                   ),
                   maxLines: 1,
@@ -1491,9 +1548,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   const SizedBox(height: 8),
                   Text(
                     draft.excerpt,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFFA8B5A0),
+                      color: context.colorScheme.onSurfaceVariant,
                       height: 1.4,
                     ),
                     maxLines: 2,
@@ -1512,25 +1569,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Delete Draft?'),
+        title: Text(context.l10n.deleteDraftDialogTitle),
         content: Text(
-          'Delete "${draft.title.isEmpty ? 'Untitled' : draft.title}"? This cannot be undone.',
+          context.l10n.deleteDraftDialogBody(
+            draft.title.isEmpty ? context.l10n.commonUntitled : draft.title,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Delete'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -1540,30 +1595,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       await ref.read(draftsNotifierProvider.notifier).deleteDraft(draft.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Draft deleted'),
+          SnackBar(
+            content: Text(context.l10n.draftDeleted),
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     }
   }
 
+  /// Localized relative time; falls back to a locale-aware short date
+  /// past one week
   String _formatTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
     if (difference.inMinutes < 1) {
-      return 'Just now';
+      return context.l10n.timeAgoJustNow;
     } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
+      return context.l10n.timeAgoMinutes(difference.inMinutes);
     } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
+      return context.l10n.timeAgoHours(difference.inHours);
     } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
+      return context.l10n.timeAgoDays(difference.inDays);
     } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+      return DateFormat.yMd(context.l10n.localeName).format(dateTime);
     }
   }
 }

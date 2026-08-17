@@ -295,28 +295,6 @@ class EditorController extends _$EditorController {
     );
   }
 
-  /// Get the current post data (for saving)
-  BlogPost toPost() {
-    final now = state.publishDate ?? DateTime.now();
-    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-    if (state.originalPost != null) {
-      // Editing existing post - preserve original metadata
-      return state.originalPost!.copyWith(
-        title: state.title,
-        bodyContent: state.bodyContent,
-      );
-    } else {
-      // New post
-      return BlogPost(
-        title: state.title,
-        date: dateStr,
-        bodyContent: state.bodyContent,
-        isLocalDraft: true,
-      );
-    }
-  }
-
   /// Reset editor to original state (discard changes)
   void reset() {
     if (state.originalPost != null) {

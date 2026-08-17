@@ -30,7 +30,7 @@ Box<BlogPost> postsBox(Ref ref) {
 /// migration and can never disagree with where the file actually lives.
 bool isRemoteDraft(BlogPost post, AppConfig config) {
   final path = post.filePath;
-  if (path == null || post.isLocalDraft) return false;
+  if (path == null) return false;
   return path.startsWith('${ContentService.cleanDir(config.draftsPath)}/');
 }
 
@@ -222,7 +222,7 @@ class PostsNotifier extends _$PostsNotifier {
       // repo-relative path (v1 records fall back to '<postsPath>/<name>')
       final existingMap = {
         for (var p in currentPosts)
-          if (!p.isLocalDraft && p.fileName != null)
+          if (p.fileName != null)
             (p.filePath ?? '${config.postsPath}/${p.fileName}'): p
       };
 
@@ -242,9 +242,7 @@ class PostsNotifier extends _$PostsNotifier {
         },
       );
 
-      // Include local drafts
-      final localDrafts = currentPosts.where((p) => p.isLocalDraft).toList();
-      final allPosts = [...localDrafts, ...posts];
+      final allPosts = [...posts];
       allPosts.sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
       // Save to cache
@@ -276,26 +274,6 @@ class PostsNotifier extends _$PostsNotifier {
     final box = ref.read(postsBoxProvider);
     await box.clear();
     state = const PostsInitial();
-  }
-
-  /// Add a new local draft
-  Future<void> addDraft(BlogPost draft) async {
-    final box = ref.read(postsBoxProvider);
-    final key = 'draft_${DateTime.now().millisecondsSinceEpoch}';
-    await box.put(key, draft);
-    
-    final currentPosts = switch (state) {
-      PostsLoaded(posts: final p) => p,
-      _ => <BlogPost>[],
-    };
-    
-    final allPosts = [draft, ...currentPosts];
-    allPosts.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    
-    state = PostsLoaded(
-      posts: allPosts,
-      lastSynced: DateTime.now(),
-    );
   }
 
   /// Update a post
@@ -341,24 +319,6 @@ class PostsNotifier extends _$PostsNotifier {
     state = PostsLoaded(
       posts: remaining,
       lastSynced: _latestSync(remaining),
-    );
-  }
-
-  /// Delete a local draft
-  Future<void> deleteDraft(BlogPost draft) async {
-    if (!draft.isLocalDraft) return;
-    
-    await draft.delete();
-    
-    final currentPosts = switch (state) {
-      PostsLoaded(posts: final p) => p,
-      _ => <BlogPost>[],
-    };
-    
-    currentPosts.removeWhere((p) => p.fileName == draft.fileName);
-    state = PostsLoaded(
-      posts: List.from(currentPosts),
-      lastSynced: DateTime.now(),
     );
   }
 }

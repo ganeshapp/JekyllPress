@@ -25,7 +25,8 @@ class _V1BlogPostAdapter extends TypeAdapter<BlogPost> {
       date: fields[3] as String,
       rawFrontmatter: fields[4] as String?,
       bodyContent: fields[5] as String,
-      isLocalDraft: fields[6] as bool,
+      // fields[6] (isLocalDraft) existed in v1 bytes but the v2 model
+      // dropped it - v1 records must still read cleanly
       lastSynced: fields[7] as DateTime?,
     );
   }
@@ -46,8 +47,10 @@ class _V1BlogPostAdapter extends TypeAdapter<BlogPost> {
       ..write(obj.rawFrontmatter)
       ..writeByte(5)
       ..write(obj.bodyContent)
+      // v1 always wrote field 6 (isLocalDraft) - keep the byte in the
+      // record so the migration test exercises authentic v1 bytes
       ..writeByte(6)
-      ..write(obj.isLocalDraft)
+      ..write(false)
       ..writeByte(7)
       ..write(obj.lastSynced);
   }
@@ -132,7 +135,6 @@ void main() {
           date: '2024-01-01',
           rawFrontmatter: 'title: Hello\ndate: 2024-01-01',
           bodyContent: 'Body text',
-          isLocalDraft: false,
           lastSynced: synced,
         ),
       );
@@ -150,7 +152,6 @@ void main() {
       expect(post.date, '2024-01-01');
       expect(post.rawFrontmatter, 'title: Hello\ndate: 2024-01-01');
       expect(post.bodyContent, 'Body text');
-      expect(post.isLocalDraft, isFalse);
       expect(post.lastSynced, synced);
       // The v2-only field is absent in v1 records: null, so callers fall
       // back to 'postsPath/fileName'.

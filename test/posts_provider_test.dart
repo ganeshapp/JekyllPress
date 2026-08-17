@@ -282,14 +282,7 @@ void main() {
       );
     });
 
-    test('local drafts and pathless v1 records are never remote drafts', () {
-      final local = BlogPost(
-        title: 'local',
-        date: '2026-08-01',
-        bodyContent: 'b',
-        isLocalDraft: true,
-      );
-      expect(isRemoteDraft(local, config), isFalse);
+    test('pathless v1 records are never remote drafts', () {
       expect(
         isRemoteDraft(_post('a.md', '2026-08-01'), config),
         isFalse,

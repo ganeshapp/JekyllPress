@@ -180,5 +180,16 @@ void main() {
       final items = service.loadAll();
       expect(items.map((i) => i.id), ['good']);
     });
+
+    test('clear empties the box (logout / repository change)', () async {
+      await service.put(_createItem(id: 'a'));
+      await service.put(_updateItem(id: 'b'));
+      expect(service.loadAll(), hasLength(2));
+
+      await service.clear();
+
+      expect(service.loadAll(), isEmpty);
+      expect(box.isEmpty, isTrue);
+    });
   });
 }

@@ -196,17 +196,6 @@ class ImageManager extends _$ImageManager {
     await _uploadMediaInBackground(filename, file);
   }
 
-  /// Get upload status for a filename
-  ImageUploadStatus? getStatus(String filename) {
-    return state[filename];
-  }
-
-  /// Check if a filename has a local file
-  String? getLocalPath(String filename) {
-    final box = ref.read(localImageMapBoxProvider);
-    return box.get(filename);
-  }
-
   /// Generate markdown image syntax. The URL is root-relative and
   /// baseurl-aware: '/assets/images/x.jpg' on a root site,
   /// '/myrepo/assets/images/x.jpg' on a project site.

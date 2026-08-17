@@ -14,10 +14,15 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     
+    <!-- allowBackup=false: the Hive caches hold full post content from
+         (possibly private) repositories - keep them out of device/cloud
+         backups. The token already lives in Keystore-backed storage. -->
     <application
         android:label="Jekyll Press"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

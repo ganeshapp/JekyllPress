@@ -196,4 +196,11 @@ class PublishQueueService {
   Future<void> put(QueuedPublish item) => _box.put(item.id, item.toMap());
 
   Future<void> remove(String id) => _box.delete(id);
+
+  /// Drop every queued item. Used when the repo-scoped local data is
+  /// wiped (logout / repository change) - a queued item carries its own
+  /// body and would otherwise flush into whatever repo is configured next.
+  Future<void> clear() async {
+    await _box.clear();
+  }
 }

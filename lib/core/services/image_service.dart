@@ -93,13 +93,16 @@ class ImageService {
     return _picker.pickVideo(source: ImageSource.gallery);
   }
 
-  /// Compress a picked video (720p-class H.264) and save it locally.
+  /// Compress a picked video (H.264, short edge capped at 640px) and save
+  /// it locally.
   /// Throws with a clear message when the compressed file still exceeds
   /// [maxVideoUploadBytes].
   Future<ProcessedMedia> compressAndSaveVideo(XFile pickedFile) async {
     final info = await VideoCompress.compressVideo(
       pickedFile.path,
-      quality: VideoQuality.MediumQuality, // 720p-class
+      // MediumQuality maps to DefaultVideoStrategy.atMost(640) on Android:
+      // the SHORT edge is capped at 640px, it is not 720p
+      quality: VideoQuality.MediumQuality,
       deleteOrigin: false,
     );
 
@@ -175,28 +178,7 @@ class ImageService {
     );
   }
 
-  /// Get local file path for a filename if it exists
-  Future<String?> getLocalPath(String filename) async {
-    final mediaDir = await _localMediaDir;
-    final filePath = path.join(mediaDir.path, filename);
-    final file = File(filePath);
-    if (await file.exists()) {
-      return filePath;
-    }
-    return null;
-  }
-
-  /// Delete a local media file
-  Future<void> deleteLocalImage(String filename) async {
-    final mediaDir = await _localMediaDir;
-    final filePath = path.join(mediaDir.path, filename);
-    final file = File(filePath);
-    if (await file.exists()) {
-      await file.delete();
-    }
-  }
-
-  /// Clear all local media (cleanup)
+  /// Clear all local media (logout / repository-change cleanup)
   Future<void> clearAllLocalImages() async {
     final mediaDir = await _localMediaDir;
     if (await mediaDir.exists()) {

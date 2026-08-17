@@ -252,7 +252,6 @@ class ContentService {
             date: parsed.date,
             rawFrontmatter: parsed.rawFrontmatter,
             bodyContent: parsed.bodyContent,
-            isLocalDraft: false,
             lastSynced: DateTime.now(),
           ));
         } catch (e) {

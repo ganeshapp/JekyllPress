@@ -35,9 +35,9 @@ class BlogPost extends HiveObject {
   @HiveField(5)
   String bodyContent;
 
-  /// True if this is a local draft not yet pushed to GitHub
-  @HiveField(6)
-  bool isLocalDraft;
+  // HiveField(6) was isLocalDraft (the vestigial second draft system,
+  // removed in v2). The index stays retired; v1 records carrying it are
+  // read fine (the value is simply ignored).
 
   /// Last sync timestamp
   @HiveField(7)
@@ -51,7 +51,6 @@ class BlogPost extends HiveObject {
     required this.date,
     this.rawFrontmatter,
     required this.bodyContent,
-    this.isLocalDraft = false,
     this.lastSynced,
   });
 
@@ -64,7 +63,6 @@ class BlogPost extends HiveObject {
     String? date,
     String? rawFrontmatter,
     String? bodyContent,
-    bool? isLocalDraft,
     DateTime? lastSynced,
   }) {
     return BlogPost(
@@ -75,7 +73,6 @@ class BlogPost extends HiveObject {
       date: date ?? this.date,
       rawFrontmatter: rawFrontmatter ?? this.rawFrontmatter,
       bodyContent: bodyContent ?? this.bodyContent,
-      isLocalDraft: isLocalDraft ?? this.isLocalDraft,
       lastSynced: lastSynced ?? this.lastSynced,
     );
   }

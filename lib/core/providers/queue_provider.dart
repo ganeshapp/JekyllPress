@@ -103,6 +103,14 @@ class PublishQueueNotifier extends _$PublishQueueNotifier {
     _reload();
   }
 
+  /// Drop every queued publish. Called when repo-scoped local data is
+  /// wiped (logout / repository change) so nothing queued for the previous
+  /// account or repository can flush into the next one.
+  Future<void> clearAll() async {
+    await ref.read(publishQueueServiceProvider).clear();
+    _reload();
+  }
+
   /// Publish queued items FIFO through the existing PublishService
   /// (reusing its duplicate-suffix and stale-sha handling). Per item:
   /// success deletes the item and its safety draft; a connectivity-class

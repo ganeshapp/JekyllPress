@@ -10,15 +10,8 @@ import '../../../core/repositories/repo_repository.dart';
 import '../../../core/services/content_service.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/l10n.dart';
 import 'folder_browser_screen.dart';
-
-// Palette shared by every section (matches AppTheme)
-const _accent = Color(0xFFE8A87C);
-const _fieldFill = Color(0xFF162A1E);
-const _borderGreen = Color(0xFF2D4A3E);
-const _textPrimary = Color(0xFFF5F5F0);
-const _textSecondary = Color(0xFFA8B5A0);
-const _errorRed = Color(0xFFE57373);
 
 /// Split a comma-separated input into trimmed, non-empty values
 List<String> parseCommaList(String input) => input
@@ -290,7 +283,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
   Future<void> _useManualRepo() async {
     final parsed = parseOwnerRepo(_manualRepoController.text);
     if (parsed == null) {
-      _showSnack('Enter the repository as owner/name');
+      _showSnack(context.l10n.enterRepoAsOwnerName);
       return;
     }
 
@@ -314,9 +307,15 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     final repo = _selectedRepo;
     if (repo == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a repository first'),
-          backgroundColor: _accent,
+        SnackBar(
+          // The background is overridden, so the foreground must come from
+          // the matching `on` role - the theme's default content colour is
+          // onSurface, which is unreadable on `primary` in light mode
+          content: Text(
+            context.l10n.selectRepositoryFirstSnack,
+            style: TextStyle(color: context.colorScheme.onPrimary),
+          ),
+          backgroundColor: context.colorScheme.primary,
         ),
       );
       return null;
@@ -358,7 +357,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     if (result == null || !mounted) return;
     final dir = ContentService.cleanDir(result);
     if (dir.isEmpty) {
-      _showSnack('The repository root cannot be a content folder');
+      _showSnack(context.l10n.rootCannotBeContentFolder);
       return;
     }
     final postsPath = _cleanPath(_postsPathController.text);
@@ -372,26 +371,19 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Change Repository?'),
-        content: const Text(
-          'Drafts and cached posts are specific to the current repository '
-          'and branch, and will be removed. This cannot be undone.',
-        ),
+        title: Text(context.l10n.changeRepositoryDialogTitle),
+        content: Text(context.l10n.changeRepositoryDialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
-              foregroundColor: _errorRed,
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Change'),
+            child: Text(context.l10n.changeAction),
           ),
         ],
       ),
@@ -403,7 +395,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     if (!_formKey.currentState!.validate()) return;
     final repo = _selectedRepo;
     if (repo == null) {
-      _showSnack('Please select a repository');
+      _showSnack(context.l10n.pleaseSelectRepository);
       return;
     }
     final branch = _selectedBranch ?? repo.defaultBranch;
@@ -456,7 +448,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       }
     } catch (e) {
       if (mounted) {
-        _showSnack('Failed to save: $e');
+        _showSnack(context.l10n.failedToSaveConfig('$e'));
       }
     } finally {
       if (mounted) {
@@ -473,7 +465,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
 
     return Scaffold(
       body: Container(
-        decoration: AppTheme.backgroundGradient,
+        decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeIn,
@@ -491,19 +483,20 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                           children: [
                             _buildHeader(user?.login),
                             const SizedBox(height: 32),
-                            _buildSectionTitle('REPOSITORY'),
+                            _buildSectionTitle(context.l10n.sectionRepository),
                             _buildRepoSection(reposAsync),
                             const SizedBox(height: 28),
-                            _buildSectionTitle('BRANCH'),
+                            _buildSectionTitle(context.l10n.sectionBranch),
                             _buildBranchSection(),
                             const SizedBox(height: 28),
-                            _buildSectionTitle('CONTENT'),
+                            _buildSectionTitle(context.l10n.sectionContent),
                             _buildContentSection(),
                             const SizedBox(height: 28),
-                            _buildSectionTitle('SITE'),
+                            _buildSectionTitle(context.l10n.sectionSite),
                             _buildSiteSection(),
                             const SizedBox(height: 28),
-                            _buildSectionTitle('FRONT MATTER DEFAULTS'),
+                            _buildSectionTitle(
+                                context.l10n.sectionFrontMatterDefaults),
                             _buildFrontMatterSection(),
                             const SizedBox(height: 40),
                             _buildSaveButton(),
@@ -533,37 +526,37 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: _borderGreen.withAlpha(60),
+            color: context.colorScheme.outline.withAlpha(60),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _accent.withAlpha(30),
+              color: context.colorScheme.primary.withAlpha(30),
               width: 1,
             ),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.settings_rounded,
             size: 32,
-            color: _accent,
+            color: context.colorScheme.primary,
           ),
         ),
         const SizedBox(height: 20),
         Text(
-          'Configure Your Blog',
+          context.l10n.configTitle,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Connect your Jekyll repository and tune how posts are published.',
+          context.l10n.configTagline,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         if (username != null) ...[
           const SizedBox(height: 4),
           Text(
-            'Logged in as @$username',
+            context.l10n.loggedInAs(username),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _accent,
+                  color: context.colorScheme.primary,
                 ),
           ),
         ],
@@ -580,7 +573,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
           fontSize: 12,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.5,
-          color: _accent.withAlpha(200),
+          color: context.colorScheme.primary.withAlpha(200),
         ),
       ),
     );
@@ -592,7 +585,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
           ? null
           : Padding(
               padding: const EdgeInsets.only(left: 16, right: 12),
-              child: Icon(icon, color: _accent, size: 22),
+              child: Icon(icon, color: context.colorScheme.primary, size: 22),
             ),
       hintText: hintText,
       contentPadding: const EdgeInsets.symmetric(
@@ -606,18 +599,18 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(
-          color: _borderGreen.withAlpha(80),
+          color: context.colorScheme.outline.withAlpha(80),
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: _accent,
+        borderSide: BorderSide(
+          color: context.colorScheme.primary,
           width: 2,
         ),
       ),
       filled: true,
-      fillColor: _fieldFill,
+      fillColor: context.colorScheme.surfaceContainer,
     );
   }
 
@@ -651,7 +644,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: reposAsync.when(
             loading: () => _buildRepoLoading(),
             error: (error, stack) => _buildRepoError(error),
@@ -660,7 +653,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Choose the repository that contains your Jekyll blog.',
+          context.l10n.chooseRepoHelper,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 12,
               ),
@@ -678,16 +671,16 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             },
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
-              foregroundColor: _textSecondary,
+              foregroundColor: context.colorScheme.onSurfaceVariant,
             ),
             child: Text(
               _manualRepoMode
-                  ? 'Hide manual entry'
-                  : "Can't see your repo? Enter owner/name manually",
-              style: const TextStyle(
+                  ? context.l10n.hideManualEntry
+                  : context.l10n.manualEntryPrompt,
+              style: TextStyle(
                 fontSize: 13,
                 decoration: TextDecoration.underline,
-                decorationColor: _textSecondary,
+                decorationColor: context.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -712,27 +705,27 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
-        color: _fieldFill,
+        color: context.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: _borderGreen.withAlpha(80),
+          color: context.colorScheme.outline.withAlpha(80),
         ),
       ),
-      child: const Row(
+      child: Row(
         children: [
           SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: _accent,
+              color: context.colorScheme.primary,
             ),
           ),
           SizedBox(width: 16),
           Text(
-            'Loading repositories...',
+            context.l10n.loadingRepositories,
             style: TextStyle(
-              color: _textSecondary,
+              color: context.colorScheme.onSurfaceVariant,
               fontSize: 15,
             ),
           ),
@@ -745,32 +738,32 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
-        color: _fieldFill,
+        color: context.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: _errorRed.withAlpha(80),
+          color: context.colorScheme.error.withAlpha(80),
         ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline_rounded,
-            color: _errorRed,
+            color: context.colorScheme.error,
             size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Failed to load repos: $error',
-              style: const TextStyle(
-                color: _errorRed,
+              context.l10n.failedToLoadRepos('$error'),
+              style: TextStyle(
+                color: context.colorScheme.error,
                 fontSize: 14,
               ),
             ),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            color: _accent,
+            color: context.colorScheme.primary,
             onPressed: () => ref.invalidate(userReposProvider),
           ),
         ],
@@ -789,12 +782,12 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       value: dropdownValue,
       decoration: _inputDecoration(
         icon: Icons.folder_rounded,
-        hintText: 'Select your blog repository',
+        hintText: context.l10n.selectBlogRepositoryHint,
       ),
-      dropdownColor: const Color(0xFF1A2F23),
-      icon: const Icon(
+      dropdownColor: context.colorScheme.surfaceContainerHigh,
+      icon: Icon(
         Icons.keyboard_arrow_down_rounded,
-        color: _textSecondary,
+        color: context.colorScheme.onSurfaceVariant,
       ),
       isExpanded: true,
       items: repos.map((repo) {
@@ -805,8 +798,8 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
               Expanded(
                 child: Text(
                   repo.fullName,
-                  style: const TextStyle(
-                    color: _textPrimary,
+                  style: TextStyle(
+                    color: context.colorScheme.onSurface,
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
@@ -821,13 +814,13 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: _accent.withAlpha(30),
+                    color: context.colorScheme.primary.withAlpha(30),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
-                    'Private',
+                  child: Text(
+                    context.l10n.privateBadge,
                     style: TextStyle(
-                      color: _accent,
+                      color: context.colorScheme.primary,
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
@@ -842,7 +835,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       },
       validator: (value) {
         if (value == null && _selectedRepo == null) {
-          return 'Please select a repository';
+          return context.l10n.pleaseSelectRepository;
         }
         return null;
       },
@@ -884,19 +877,19 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: _fieldFill,
+        color: context.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderGreen.withAlpha(80)),
+        border: Border.all(color: context.colorScheme.outline.withAlpha(80)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.folder_special_rounded, color: _accent, size: 20),
+          Icon(Icons.folder_special_rounded, color: context.colorScheme.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Using ${repo.fullName}',
-              style: const TextStyle(
-                color: _textPrimary,
+              context.l10n.usingRepo(repo.fullName),
+              style: TextStyle(
+                color: context.colorScheme.onSurface,
                 fontSize: 14,
                 fontFamily: 'monospace',
               ),
@@ -913,27 +906,25 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
   Widget _buildJekyllBanner() {
     final (color, icon, message) = _isCheckingJekyll
         ? (
-            _textSecondary,
+            context.colorScheme.onSurfaceVariant,
             Icons.hourglass_top_rounded,
-            'Checking for a Jekyll site...',
+            context.l10n.checkingForJekyllSite,
           )
         : switch (_jekyllCheck!) {
             JekyllRepoCheck.jekyll => (
-                AppTheme.success,
+                context.appColors.success,
                 Icons.check_circle_rounded,
-                'Jekyll site detected',
+                context.l10n.jekyllSiteDetected,
               ),
             JekyllRepoCheck.couldNotVerify => (
-                _accent,
+                context.colorScheme.primary,
                 Icons.help_outline_rounded,
-                'Could not verify this is a Jekyll site - '
-                    'you can continue anyway',
+                context.l10n.jekyllCouldNotVerify,
               ),
             JekyllRepoCheck.notJekyll => (
-                _errorRed,
+                context.colorScheme.error,
                 Icons.warning_amber_rounded,
-                'This does not look like a Jekyll repo '
-                    '(no _config.yml or $_jekyllCheckedPostsPath)',
+                context.l10n.notJekyllRepo(_jekyllCheckedPostsPath),
               ),
           };
 
@@ -947,12 +938,12 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       child: Row(
         children: [
           if (_isCheckingJekyll)
-            const SizedBox(
+            SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: _textSecondary,
+                color: context.colorScheme.onSurfaceVariant,
               ),
             )
           else
@@ -983,10 +974,10 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _accent.withAlpha(15),
+        color: context.colorScheme.primary.withAlpha(15),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _accent.withAlpha(50),
+          color: context.colorScheme.primary.withAlpha(50),
           width: 1,
         ),
       ),
@@ -995,21 +986,19 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.info_outline_rounded,
-                color: _accent,
+                color: context.colorScheme.primary,
                 size: 20,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   isDeviceAuth
-                      ? 'No repositories found. A GitHub App only sees '
-                          'repositories it is installed on - install it on '
-                          'your blog repo, then refresh.'
-                      : 'No repositories found for this account.',
-                  style: const TextStyle(
-                    color: _accent,
+                      ? context.l10n.noReposFoundDeviceAuth
+                      : context.l10n.noReposFoundForAccount,
+                  style: TextStyle(
+                    color: context.colorScheme.primary,
                     fontSize: 13,
                     height: 1.5,
                   ),
@@ -1017,7 +1006,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
               ),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded),
-                color: _accent,
+                color: context.colorScheme.primary,
                 onPressed: () => ref.invalidate(userReposProvider),
               ),
             ],
@@ -1032,10 +1021,10 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                   mode: LaunchMode.externalApplication,
                 ),
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                label: const Text('Open GitHub App installations'),
+                label: Text(context.l10n.openGitHubAppInstallations),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _accent,
-                  side: const BorderSide(color: _accent),
+                  foregroundColor: context.colorScheme.primary,
+                  side: BorderSide(color: context.colorScheme.primary),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -1057,24 +1046,24 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
-          color: _fieldFill.withAlpha(120),
+          color: context.colorScheme.surfaceContainer.withAlpha(120),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _borderGreen.withAlpha(50),
+            color: context.colorScheme.outline.withAlpha(50),
           ),
         ),
-        child: const Row(
+        child: Row(
           children: [
             Icon(
               Icons.fork_right_rounded,
-              color: _textSecondary,
+              color: context.colorScheme.onSurfaceVariant,
               size: 22,
             ),
             SizedBox(width: 12),
             Text(
-              'Select a repository first',
+              context.l10n.selectARepositoryFirst,
               style: TextStyle(
-                color: _textSecondary,
+                color: context.colorScheme.onSurfaceVariant,
                 fontSize: 15,
               ),
             ),
@@ -1092,7 +1081,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: branchesAsync.when(
             loading: () => Container(
               padding: const EdgeInsets.symmetric(
@@ -1100,27 +1089,27 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                 vertical: 18,
               ),
               decoration: BoxDecoration(
-                color: _fieldFill,
+                color: context.colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: _borderGreen.withAlpha(80),
+                  color: context.colorScheme.outline.withAlpha(80),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: _accent,
+                      color: context.colorScheme.primary,
                     ),
                   ),
                   SizedBox(width: 16),
                   Text(
-                    'Loading branches...',
+                    context.l10n.loadingBranches,
                     style: TextStyle(
-                      color: _textSecondary,
+                      color: context.colorScheme.onSurfaceVariant,
                       fontSize: 15,
                     ),
                   ),
@@ -1133,33 +1122,33 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                 vertical: 18,
               ),
               decoration: BoxDecoration(
-                color: _fieldFill,
+                color: context.colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: _errorRed.withAlpha(80),
+                  color: context.colorScheme.error.withAlpha(80),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.error_outline_rounded,
-                    color: _errorRed,
+                    color: context.colorScheme.error,
                     size: 20,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Failed to load branches - using '
-                      '"${_selectedBranch ?? repo.defaultBranch}"',
-                      style: const TextStyle(
-                        color: _errorRed,
+                      context.l10n.failedToLoadBranches(
+                          _selectedBranch ?? repo.defaultBranch),
+                      style: TextStyle(
+                        color: context.colorScheme.error,
                         fontSize: 14,
                       ),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded),
-                    color: _accent,
+                    color: context.colorScheme.primary,
                     onPressed: () => ref.invalidate(repoBranchesProvider(
                       repoOwner: repo.ownerLogin,
                       repoName: repo.name,
@@ -1173,7 +1162,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Branch posts are read from and published to.',
+          context.l10n.branchHelper,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 12,
               ),
@@ -1201,10 +1190,10 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return DropdownButtonFormField<String>(
       value: value,
       decoration: _inputDecoration(icon: Icons.fork_right_rounded),
-      dropdownColor: const Color(0xFF1A2F23),
-      icon: const Icon(
+      dropdownColor: context.colorScheme.surfaceContainerHigh,
+      icon: Icon(
         Icons.keyboard_arrow_down_rounded,
-        color: _textSecondary,
+        color: context.colorScheme.onSurfaceVariant,
       ),
       isExpanded: true,
       items: items.map((branch) {
@@ -1215,8 +1204,8 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
               Expanded(
                 child: Text(
                   branch,
-                  style: const TextStyle(
-                    color: _textPrimary,
+                  style: TextStyle(
+                    color: context.colorScheme.onSurface,
                     fontSize: 15,
                     fontFamily: 'monospace',
                   ),
@@ -1231,13 +1220,13 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: _accent.withAlpha(30),
+                    color: context.colorScheme.primary.withAlpha(30),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
-                    'default',
+                  child: Text(
+                    context.l10n.defaultBranchBadge,
                     style: TextStyle(
-                      color: _accent,
+                      color: context.colorScheme.primary,
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1262,11 +1251,11 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildPathField(
-          label: 'Posts Folder',
+          label: context.l10n.postsFolderLabel,
           controller: _postsPathController,
           icon: Icons.article_rounded,
           hint: '_posts',
-          helper: 'Folder your published Jekyll posts live in.',
+          helper: context.l10n.postsFolderHelper,
           onBrowse: () => _browsePathInto(
             _postsPathController,
             '_posts',
@@ -1276,23 +1265,22 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
         ),
         const SizedBox(height: 20),
         _buildPathField(
-          label: 'Drafts Folder',
+          label: context.l10n.draftsFolderLabel,
           controller: _draftsPathController,
           icon: Icons.edit_note_rounded,
           hint: '_drafts',
-          helper: 'Folder Jekyll drafts are saved to.',
+          helper: context.l10n.draftsFolderHelper,
           onBrowse: () => _browsePathInto(_draftsPathController, '_drafts'),
         ),
         const SizedBox(height: 20),
         _buildContentDirsEditor(),
         const SizedBox(height: 20),
         _buildPathField(
-          label: 'Image Assets Path',
+          label: context.l10n.imageAssetsPathLabel,
           controller: _assetsPathController,
           icon: Icons.image_rounded,
           hint: 'assets/images',
-          helper: 'Folder where images will be uploaded. '
-              'Tap the folder icon to browse.',
+          helper: context.l10n.imageAssetsPathHelper,
           onBrowse: () =>
               _browsePathInto(_assetsPathController, 'assets/images'),
         ),
@@ -1318,7 +1306,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
           children: [
             Expanded(
               child: Container(
-                decoration: AppTheme.cardGlow,
+                decoration: AppTheme.cardGlow(context),
                 child: TextFormField(
                   controller: controller,
                   keyboardType: TextInputType.url,
@@ -1331,10 +1319,11 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                   decoration: _inputDecoration(icon: icon, hintText: hint),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter the ${label.toLowerCase()}';
+                      return context.l10n
+                          .pathFieldRequired(label.toLowerCase());
                     }
                     if (_cleanPath(value).isEmpty) {
-                      return 'Invalid path';
+                      return context.l10n.invalidPath;
                     }
                     return null;
                   },
@@ -1363,14 +1352,14 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: _accent.withAlpha(20),
+            color: context.colorScheme.primary.withAlpha(20),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Material(
-        color: const Color(0xFF1A2F23),
+        color: context.colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
@@ -1381,21 +1370,21 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: _accent.withAlpha(60),
+                color: context.colorScheme.primary.withAlpha(60),
               ),
             ),
             child: isLoading
-                ? const Center(
+                ? Center(
                     child: SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: _accent,
+                        color: context.colorScheme.primary,
                       ),
                     ),
                   )
-                : Icon(icon, color: _accent, size: 24),
+                : Icon(icon, color: context.colorScheme.primary, size: 24),
           ),
         ),
       ),
@@ -1406,7 +1395,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFieldLabel('Additional Content Folders'),
+        _buildFieldLabel(context.l10n.additionalContentFoldersLabel),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1414,46 +1403,43 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             for (final dir in _extraContentDirs)
               InputChip(
                 label: Text(dir),
-                labelStyle: const TextStyle(
-                  color: _textPrimary,
+                labelStyle: TextStyle(
+                  color: context.colorScheme.onSurface,
                   fontSize: 13,
                   fontFamily: 'monospace',
                 ),
-                backgroundColor: _fieldFill,
-                deleteIconColor: _textSecondary,
+                backgroundColor: context.colorScheme.surfaceContainer,
+                deleteIconColor: context.colorScheme.onSurfaceVariant,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: _borderGreen.withAlpha(80)),
+                  side: BorderSide(color: context.colorScheme.outline.withAlpha(80)),
                 ),
                 onDeleted: () {
                   setState(() => _extraContentDirs.remove(dir));
                 },
               ),
             ActionChip(
-              avatar: const Icon(
+              avatar: Icon(
                 Icons.add_rounded,
                 size: 18,
-                color: _accent,
+                color: context.colorScheme.primary,
               ),
-              label: const Text('Add folder'),
-              labelStyle: const TextStyle(
-                color: _accent,
+              label: Text(context.l10n.addFolder),
+              labelStyle: TextStyle(
+                color: context.colorScheme.primary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
-              backgroundColor: _accent.withAlpha(15),
+              backgroundColor: context.colorScheme.primary.withAlpha(15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: _accent.withAlpha(60)),
+                side: BorderSide(color: context.colorScheme.primary.withAlpha(60)),
               ),
               onPressed: _addContentDir,
             ),
           ],
         ),
-        _buildHelperText(
-          'Jekyll collections you also publish to (e.g. _wiki, _projects). '
-          'Switch between them from the dashboard.',
-        ),
+        _buildHelperText(context.l10n.additionalContentFoldersHelper),
       ],
     );
   }
@@ -1464,9 +1450,9 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFieldLabel('Site URL'),
+        _buildFieldLabel(context.l10n.siteUrlLabel),
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: TextFormField(
             controller: _siteUrlController,
             keyboardType: TextInputType.url,
@@ -1482,14 +1468,11 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             ),
           ),
         ),
-        _buildHelperText(
-          'Public URL of your published site. Pre-filled from the GitHub '
-          'Pages convention - change it if you use a custom domain.',
-        ),
+        _buildHelperText(context.l10n.siteUrlHelper),
         const SizedBox(height: 20),
-        _buildFieldLabel('Base URL'),
+        _buildFieldLabel(context.l10n.baseUrlLabel),
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: TextFormField(
             controller: _baseurlController,
             keyboardType: TextInputType.url,
@@ -1505,12 +1488,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             ),
           ),
         ),
-        _buildHelperText(
-          'Project pages are served under /<repo> '
-          '(e.g. https://user.github.io/blog needs baseurl /blog) - image '
-          'links are prefixed with it. Leave empty for user/org sites and '
-          'custom domains served at the root.',
-        ),
+        _buildHelperText(context.l10n.baseUrlHelper),
       ],
     );
   }
@@ -1522,16 +1500,15 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Leave empty to let your site's _config.yml defaults apply "
-          '(recommended).',
+          context.l10n.frontMatterHelper,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 12,
               ),
         ),
         const SizedBox(height: 16),
-        _buildFieldLabel('Layout'),
+        _buildFieldLabel(context.l10n.layoutLabel),
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: TextFormField(
             controller: _layoutController,
             autocorrect: false,
@@ -1547,9 +1524,9 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
           ),
         ),
         const SizedBox(height: 20),
-        _buildFieldLabel('Default Categories'),
+        _buildFieldLabel(context.l10n.defaultCategoriesLabel),
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: TextFormField(
             controller: _categoriesController,
             autocorrect: false,
@@ -1560,14 +1537,14 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             ),
             decoration: _inputDecoration(
               icon: Icons.category_rounded,
-              hintText: 'blog, notes (comma separated)',
+              hintText: context.l10n.defaultCategoriesHint,
             ),
           ),
         ),
         const SizedBox(height: 20),
-        _buildFieldLabel('Default Tags'),
+        _buildFieldLabel(context.l10n.defaultTagsLabel),
         Container(
-          decoration: AppTheme.cardGlow,
+          decoration: AppTheme.cardGlow(context),
           child: TextFormField(
             controller: _tagsController,
             autocorrect: false,
@@ -1578,7 +1555,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             ),
             decoration: _inputDecoration(
               icon: Icons.tag_rounded,
-              hintText: 'jekyll, writing (comma separated)',
+              hintText: context.l10n.defaultTagsHint,
             ),
           ),
         ),
@@ -1595,20 +1572,20 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
       child: ElevatedButton(
         onPressed: _isSaving ? null : _saveConfiguration,
         child: _isSaving
-            ? const SizedBox(
+            ? SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFF0D1B14),
+                  color: context.colorScheme.onPrimary,
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.save_rounded, size: 20),
-                  SizedBox(width: 8),
-                  Text('Save Configuration'),
+                  const Icon(Icons.save_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Text(context.l10n.saveConfiguration),
                 ],
               ),
       ),
@@ -1619,14 +1596,14 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     return Center(
       child: TextButton.icon(
         onPressed: () => Navigator.of(context).pop(false),
-        icon: const Icon(
+        icon: Icon(
           Icons.close_rounded,
           size: 18,
-          color: _textSecondary,
+          color: context.colorScheme.onSurfaceVariant,
         ),
-        label: const Text(
-          'Cancel',
-          style: TextStyle(color: _textSecondary),
+        label: Text(
+          context.l10n.commonCancel,
+          style: TextStyle(color: context.colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -1638,14 +1615,14 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
         onPressed: () {
           ref.read(authNotifierProvider.notifier).logout();
         },
-        icon: const Icon(
+        icon: Icon(
           Icons.logout_rounded,
           size: 18,
-          color: _textSecondary,
+          color: context.colorScheme.onSurfaceVariant,
         ),
-        label: const Text(
-          'Use different account',
-          style: TextStyle(color: _textSecondary),
+        label: Text(
+          context.l10n.useDifferentAccount,
+          style: TextStyle(color: context.colorScheme.onSurfaceVariant),
         ),
       ),
     );

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/config_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../l10n/l10n.dart';
 import '../../config/presentation/config_screen.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import 'login_screen.dart';
@@ -45,43 +47,32 @@ class _SplashScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0D1B14),
-              Color(0xFF0A1910),
-              Color(0xFF0D1B14),
-            ],
-          ),
-        ),
-        child: const Center(
+        decoration: AppTheme.backgroundGradient(context),
+        child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.edit_note_rounded,
                 size: 64,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               Text(
-                'JekyllPress',
+                context.l10n.appTitle,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFFF5F5F0),
+                  color: context.colorScheme.onSurface,
                   letterSpacing: -1,
                 ),
               ),
-              SizedBox(height: 32),
-              SizedBox(
+              const SizedBox(height: 32),
+              const SizedBox(
                 width: 32,
                 height: 32,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFFE8A87C),
                 ),
               ),
             ],

@@ -230,19 +230,6 @@ void main() {
       expect(after, equals(again));
     });
 
-    test('toPost preserves original metadata when editing', () {
-      final post = buildPost();
-      final controller = container.read(editorControllerProvider.notifier);
-      controller.initializeWithPost(post);
-      controller.updateBody('new body');
-
-      final result = controller.toPost();
-      expect(result.sha, post.sha);
-      expect(result.fileName, post.fileName);
-      expect(result.date, post.date);
-      expect(result.bodyContent, 'new body');
-    });
-
     test('clear resets to empty new-post state', () {
       final controller = container.read(editorControllerProvider.notifier);
       controller.initializeWithPost(buildPost());

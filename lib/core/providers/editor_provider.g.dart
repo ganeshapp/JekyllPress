@@ -6,7 +6,7 @@ part of 'editor_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$editorControllerHash() => r'113c873c4a11ab43a2f567d48c5581769ff11da6';
+String _$editorControllerHash() => r'c951ac5424952481d33b5d781574197a98423d17';
 
 /// Controller for managing editor state
 /// This preserves state across tab switches and rebuilds

@@ -1,5 +1,32 @@
 # JekyllPress Audit — 2026-08-17
 
+## v2.0.0 status (post-audit)
+
+The roadmap below **shipped in v2.0.0** — all of P0 (correctness fixes + editor
+rework), P1 (shared ApiClient + GitHub App Device Flow), P2 (config v2 /
+any-Jekyll-site generalization), P3 (video, `_drafts`, delete, search, view
+post, publish gating, conflict UX, offline queue), and the P4 hygiene items
+(dialogs, keyboard/tab fixes, real About version, privacy policy, landscape,
+`allowBackup=false`, dead-code removal, 370+ tests, CI).
+
+Known deliberate gaps (not bugs — descoped):
+
+- **Post rename/redirect**: titles of published posts stay locked; no
+  rename-with-redirect flow.
+- **Two-pane tablet editor**: landscape is unlocked and light/dark/system
+  themes shipped, but there is no dedicated tablet layout.
+- **Video snippet template config**: the HTML5 `<video>` embed is a fixed
+  owner-pattern snippet, not user-configurable.
+- **Compression settings**: image (1080p/85%) and video (short edge ≤640px,
+  25MB upload cap) targets are hardcoded, not configurable.
+- **Translations**: strings are extracted into `gen_l10n` ARB resources, but
+  English (`app_en.arb`) is the only locale shipped.
+
+The remainder of this document is the original v1.1.0 audit, kept for
+reference.
+
+---
+
 Full-codebase audit at commit `3e22bbf` (v1.1.0). Method: six parallel reviewers (auth/security, editor UX, publish pipeline, configurability, state & data, product completeness), each finding adversarially re-verified against the code; the crash claims were verified by executing the actual Dart snippets. Plus research on GitHub's 2026 serverless-auth options.
 
 ## TL;DR

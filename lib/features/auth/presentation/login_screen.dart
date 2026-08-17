@@ -7,6 +7,7 @@ import '../../../core/services/dio_client.dart';
 import '../../../core/services/github_oauth_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/token_format.dart';
+import '../../../l10n/l10n.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -98,7 +99,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await Clipboard.setData(ClipboardData(text: url));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open browser - link copied: $url')),
+        SnackBar(
+          content: Text(context.l10n.couldNotOpenBrowserLinkCopied(url)),
+        ),
       );
     }
   }
@@ -117,7 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final clientId = _clientIdController.text.trim();
     if (clientId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Paste the Client ID from your GitHub App')),
+        SnackBar(content: Text(context.l10n.pasteClientIdPrompt)),
       );
       return;
     }
@@ -136,10 +139,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       isScrollControlled: true,
       isDismissible: false,
       enableDrag: false,
-      backgroundColor: const Color(0xFF1A2F23),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (context) => _DeviceFlowSheet(clientId: clientId),
     );
     if (tokens == null || !mounted) return;
@@ -174,7 +173,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     return Scaffold(
       body: Container(
-        decoration: AppTheme.backgroundGradient,
+        decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeIn,
@@ -229,37 +228,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildHeader() {
+    final scheme = context.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF2D4A3E).withAlpha(60),
+            color: scheme.outline.withAlpha(60),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: const Color(0xFFE8A87C).withAlpha(30),
+              color: scheme.primary.withAlpha(30),
               width: 1,
             ),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.edit_note_rounded,
             size: 40,
-            color: Color(0xFFE8A87C),
+            color: scheme.primary,
           ),
         ),
         const SizedBox(height: 24),
         Text(
-          'JekyllPress',
-          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+          context.l10n.appTitle,
+          style: context.textTheme.displayLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -1.5,
               ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Your mobile CMS for Jekyll blogs.\nConnect with your GitHub account.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          context.l10n.loginTagline,
+          style: context.textTheme.bodyMedium?.copyWith(
                 height: 1.6,
               ),
         ),
@@ -273,20 +273,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       child: ElevatedButton(
         onPressed: isLoading ? null : _onSignInWithGitHub,
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFF0D1B14),
+                  color: context.colorScheme.onPrimary,
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.verified_user_rounded, size: 20),
-                  SizedBox(width: 10),
-                  Text('Sign in with GitHub'),
+                  const Icon(Icons.verified_user_rounded, size: 20),
+                  const SizedBox(width: 10),
+                  Text(context.l10n.signInWithGitHub),
                 ],
               ),
       ),
@@ -296,13 +296,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   /// One-time card shown when no client id exists yet (neither compiled
   /// in nor previously saved). Once an id is saved it never reappears.
   Widget _buildSetupCard(bool isLoading) {
+    final scheme = context.colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2F23),
+        color: scheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFE8A87C).withAlpha(60),
+          color: scheme.primary.withAlpha(60),
           width: 1,
         ),
       ),
@@ -311,15 +312,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.rocket_launch_rounded,
                 size: 20,
-                color: Color(0xFFE8A87C),
+                color: scheme.primary,
               ),
               const SizedBox(width: 10),
               Text(
-                'One-time setup',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                context.l10n.oneTimeSetupTitle,
+                style: context.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
               ),
@@ -327,11 +328,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Signing in without a token requires a free GitHub App you '
-            'register once on your account. Give it the Contents: Read & '
-            'write permission and enable Device Flow, then paste its '
-            'Client ID here - JekyllPress remembers it forever.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            context.l10n.oneTimeSetupBody,
+            style: context.textTheme.bodyMedium?.copyWith(
                   height: 1.6,
                 ),
           ),
@@ -339,10 +337,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           OutlinedButton.icon(
             onPressed: isLoading ? null : () => _openUrl(_appSetupUrl),
             icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: const Text('Open GitHub App setup'),
+            label: Text(context.l10n.openGitHubAppSetup),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFE8A87C),
-              side: const BorderSide(color: Color(0xFFE8A87C)),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -360,8 +356,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               fontFamily: 'monospace',
               letterSpacing: 1,
             ),
-            decoration: const InputDecoration(
-              labelText: 'Client ID',
+            decoration: InputDecoration(
+              labelText: context.l10n.clientIdLabel,
               hintText: 'Iv23xxxxxxxxxxxxxxxx',
             ),
             onSubmitted: (_) => _saveClientIdAndSignIn(),
@@ -371,7 +367,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             height: 48,
             child: ElevatedButton(
               onPressed: isLoading ? null : _saveClientIdAndSignIn,
-              child: const Text('Save & sign in'),
+              child: Text(context.l10n.saveAndSignIn),
             ),
           ),
         ],
@@ -380,6 +376,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildPatToggle(bool isLoading) {
+    final scheme = context.colorScheme;
     return TextButton.icon(
       onPressed: isLoading
           ? null
@@ -389,18 +386,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ? Icons.keyboard_arrow_up_rounded
             : Icons.keyboard_arrow_down_rounded,
         size: 20,
-        color: const Color(0xFFA8B5A0),
+        color: scheme.onSurfaceVariant,
       ),
-      label: const Text(
-        'Use a Personal Access Token instead',
-        style: TextStyle(color: Color(0xFFA8B5A0)),
+      label: Text(
+        context.l10n.usePatInstead,
+        style: TextStyle(color: scheme.onSurfaceVariant),
       ),
     );
   }
 
   Widget _buildTokenField(bool isLoading) {
+    final scheme = context.colorScheme;
     return Container(
-      decoration: AppTheme.cardGlow,
+      decoration: AppTheme.cardGlow(context),
       child: TextFormField(
         controller: _tokenController,
         enabled: !isLoading,
@@ -413,28 +411,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           letterSpacing: 1,
         ),
         decoration: InputDecoration(
-          labelText: 'Personal Access Token',
+          labelText: context.l10n.patLabel,
           hintText: 'ghp_xxxxxxxxxxxxxxxxxxxx',
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 16, right: 12),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 12),
             child: Icon(
               Icons.key_rounded,
-              color: Color(0xFFE8A87C),
+              color: scheme.primary,
               size: 22,
             ),
           ),
           suffixIcon: IconButton(
             icon: Icon(
               _obscureToken ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              color: const Color(0xFFA8B5A0),
+              color: scheme.onSurfaceVariant,
               size: 22,
             ),
+            tooltip: _obscureToken
+                ? context.l10n.showTokenTooltip
+                : context.l10n.hideTokenTooltip,
             onPressed: () => setState(() => _obscureToken = !_obscureToken),
           ),
         ),
         validator: (value) {
           if (value == null || value.trim().isEmpty) {
-            return 'Please enter your GitHub token';
+            return context.l10n.enterTokenValidation;
           }
           // Format oddities only warn (below the field); GitHub may add
           // new token formats and the API is the real judge
@@ -453,30 +454,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildFormatWarning() {
+    final warning = context.appColors.warning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8A87C).withAlpha(20),
+        color: warning.withAlpha(20),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE8A87C).withAlpha(50),
+          color: warning.withAlpha(50),
           width: 1,
         ),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Icon(
             Icons.warning_amber_rounded,
-            color: Color(0xFFE8A87C),
+            color: warning,
             size: 20,
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'This doesn\'t look like a GitHub token - double-check it. '
-              'You can still try connecting.',
+              context.l10n.tokenFormatWarning,
               style: TextStyle(
-                color: Color(0xFFE8A87C),
+                color: warning,
                 fontSize: 13,
               ),
             ),
@@ -487,29 +488,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildErrorMessage(String message) {
+    final error = context.colorScheme.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE57373).withAlpha(20),
+        color: error.withAlpha(20),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE57373).withAlpha(50),
+          color: error.withAlpha(50),
           width: 1,
         ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline_rounded,
-            color: Color(0xFFE57373),
+            color: error,
             size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: Color(0xFFE57373),
+              style: TextStyle(
+                color: error,
                 fontSize: 14,
               ),
             ),
@@ -525,11 +527,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       child: OutlinedButton(
         onPressed: isLoading ? null : _validateAndLogin,
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFE8A87C),
-          side: const BorderSide(color: Color(0xFFE8A87C)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
           textStyle: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -542,15 +539,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFFE8A87C),
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Connect with token'),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_rounded, size: 20),
+                  Text(context.l10n.connectWithToken),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, size: 20),
                 ],
               ),
       ),
@@ -561,7 +557,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return TextButton.icon(
       onPressed: isLoading ? null : () => _openUrl(_createTokenUrl),
       icon: const Icon(Icons.open_in_new_rounded, size: 16),
-      label: const Text('Create a token on GitHub'),
+      label: Text(context.l10n.createTokenOnGitHub),
     );
   }
 }
@@ -632,7 +628,7 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
       if (mounted && !_cancelled) setState(() => _error = e.message);
     } catch (_) {
       if (mounted && !_cancelled) {
-        setState(() => _error = 'GitHub sign-in failed - try again');
+        setState(() => _error = context.l10n.deviceSignInFailed);
       }
     }
   }
@@ -664,17 +660,18 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    'Sign in with GitHub',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    context.l10n.signInWithGitHub,
+                    style: context.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                   ),
                 ),
                 IconButton(
                   onPressed: _cancel,
-                  icon: const Icon(
+                  tooltip: context.l10n.cancelSignInTooltip,
+                  icon: Icon(
                     Icons.close_rounded,
-                    color: Color(0xFFA8B5A0),
+                    color: context.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -693,23 +690,25 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
   }
 
   Widget _buildRequesting() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 32),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
+          const SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Color(0xFFE8A87C),
             ),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
           Text(
-            'Requesting a code from GitHub...',
-            style: TextStyle(color: Color(0xFFA8B5A0), fontSize: 15),
+            context.l10n.requestingCodeFromGitHub,
+            style: TextStyle(
+              color: context.colorScheme.onSurfaceVariant,
+              fontSize: 15,
+            ),
           ),
         ],
       ),
@@ -717,42 +716,43 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
   }
 
   Widget _buildWaiting(DeviceCodeResponse code) {
+    final scheme = context.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Enter this code on GitHub:',
+          context.l10n.enterCodeOnGitHub,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: context.textTheme.bodyMedium,
         ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(vertical: 20),
           decoration: BoxDecoration(
-            color: const Color(0xFF0D1B14),
+            color: scheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFFE8A87C).withAlpha(60),
+              color: scheme.primary.withAlpha(60),
               width: 1,
             ),
           ),
           child: Text(
             code.userCode,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w700,
               fontFamily: 'monospace',
               letterSpacing: 4,
-              color: Color(0xFFE8D5B5),
+              color: scheme.tertiary,
             ),
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Copied to clipboard',
+        Text(
+          context.l10n.copiedToClipboard,
           textAlign: TextAlign.center,
-          style: TextStyle(color: Color(0xFF81C784), fontSize: 12),
+          style: TextStyle(color: context.appColors.success, fontSize: 12),
         ),
         const SizedBox(height: 20),
         SizedBox(
@@ -760,34 +760,36 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
           child: ElevatedButton.icon(
             onPressed: _openVerificationPage,
             icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: const Text('Open github.com/login/device'),
+            label: Text(context.l10n.openGitHubDeviceLogin),
           ),
         ),
         const SizedBox(height: 20),
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFFE8A87C),
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Text(
-              'Waiting for you to authorize...',
-              style: TextStyle(color: Color(0xFFA8B5A0), fontSize: 14),
+              context.l10n.waitingForAuthorization,
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         TextButton(
           onPressed: _cancel,
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: Color(0xFFA8B5A0)),
+          child: Text(
+            context.l10n.commonCancel,
+            style: TextStyle(color: scheme.onSurfaceVariant),
           ),
         ),
       ],
@@ -795,32 +797,33 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
   }
 
   Widget _buildError(String message) {
+    final error = context.colorScheme.error;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFE57373).withAlpha(20),
+            color: error.withAlpha(20),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFFE57373).withAlpha(50),
+              color: error.withAlpha(50),
               width: 1,
             ),
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline_rounded,
-                color: Color(0xFFE57373),
+                color: error,
                 size: 20,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   message,
-                  style: const TextStyle(
-                    color: Color(0xFFE57373),
+                  style: TextStyle(
+                    color: error,
                     fontSize: 14,
                   ),
                 ),
@@ -833,7 +836,7 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
           height: 48,
           child: ElevatedButton(
             onPressed: _cancel,
-            child: const Text('Close'),
+            child: Text(context.l10n.commonClose),
           ),
         ),
       ],

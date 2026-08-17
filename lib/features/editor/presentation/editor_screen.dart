@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
@@ -20,6 +21,7 @@ import '../../../core/services/github_upload_service.dart';
 import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/frontmatter_parser.dart';
+import '../../../l10n/l10n.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
   final BlogPost? post;
@@ -248,17 +250,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       // Only claim a save when the draft was actually persisted
       if (saved) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Row(
               children: [
-                Icon(Icons.save_rounded, color: Color(0xFF81C784), size: 18),
-                SizedBox(width: 12),
-                Text('Draft saved'),
+                Icon(Icons.save_rounded, color: context.appColors.success, size: 18),
+                const SizedBox(width: 12),
+                Text(context.l10n.draftSavedSnack),
               ],
             ),
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 1),
-            backgroundColor: Color(0xFF1A2F23),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
@@ -280,8 +281,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     if (title.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a title'),
+        SnackBar(
+          content: Text(context.l10n.pleaseEnterTitle),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -377,35 +378,34 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           // Show success message, with a View action when the post has a
           // public URL on the configured site
           final publishState = ref.read(publishNotifierProvider);
-          String message = 'Post published successfully!';
+          String message = context.l10n.postPublishedSuccess;
           String? viewUrl;
           if (publishState is PublishSucceeded) {
             viewUrl = publishState.publicUrl;
             message = asDraft
-                ? 'Draft saved to GitHub: ${publishState.filename}'
+                ? context.l10n.draftSavedToGitHub(publishState.filename)
                 : isNewPost
-                    ? 'Post created: ${publishState.filename}'
-                    : 'Post updated successfully!';
+                    ? context.l10n.postCreated(publishState.filename)
+                    : context.l10n.postUpdatedSuccess;
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF81C784), size: 20),
+                  Icon(Icons.check_circle_rounded, color: context.appColors.success, size: 20),
                   const SizedBox(width: 12),
                   Expanded(child: Text(message)),
                 ],
               ),
               behavior: SnackBarBehavior.floating,
-              backgroundColor: const Color(0xFF1A2F23),
               duration: viewUrl != null
                   ? const Duration(seconds: 6)
                   : const Duration(seconds: 4),
               action: viewUrl != null
                   ? SnackBarAction(
-                      label: 'View',
-                      textColor: const Color(0xFFE8A87C),
+                      label: context.l10n.commonView,
+                      textColor: context.colorScheme.primary,
                       onPressed: () => _launchExternal(viewUrl!),
                     )
                   : null,
@@ -447,13 +447,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.error_outline_rounded, color: Color(0xFFE57373), size: 20),
+                Icon(Icons.error_outline_rounded, color: context.colorScheme.error, size: 20),
                 const SizedBox(width: 12),
-                Expanded(child: Text(failure?.error ?? 'Failed to publish')),
+                Expanded(
+                  child: Text(
+                    failure?.error ?? context.l10n.failedToPublishGeneric,
+                  ),
+                ),
               ],
             ),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF1A2F23),
           ),
         );
         return;
@@ -564,17 +567,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     ref.read(currentDraftNotifierProvider.notifier).clear();
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Row(
           children: [
             Icon(Icons.schedule_send_rounded,
-                color: Color(0xFFE8A87C), size: 20),
-            SizedBox(width: 12),
-            Expanded(child: Text('Queued - will publish when back online')),
+                color: context.colorScheme.primary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text(context.l10n.queuedWillPublishWhenOnline)),
           ],
         ),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Color(0xFF1A2F23),
       ),
     );
     Navigator.of(context).pop();
@@ -584,31 +586,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return showDialog<_OfflineChoice>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('You appear to be offline'),
-        content: const Text(
-          'GitHub cannot be reached right now. This post can be queued '
-          'and published automatically when the connection returns.',
-        ),
+        title: Text(context.l10n.offlineDialogTitle),
+        content: Text(context.l10n.offlineDialogBody),
         actions: [
           TextButton(
             onPressed: () =>
                 Navigator.pop(context, _OfflineChoice.keepEditing),
-            child: const Text('Keep editing'),
+            child: Text(context.l10n.keepEditing),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _OfflineChoice.discard),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Discard'),
+            child: Text(context.l10n.discardAction),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _OfflineChoice.queue),
-            child: const Text('Queue and publish when online'),
+            child: Text(context.l10n.queueAndPublishWhenOnline),
           ),
         ],
       ),
@@ -619,30 +614,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return showDialog<_ConflictChoice>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Post changed on GitHub'),
-        content: const Text(
-          'This post was changed on GitHub after you opened it. '
-          'Overwrite it with your version, or keep both to review?',
-        ),
+        title: Text(context.l10n.conflictDialogTitle),
+        content: Text(context.l10n.conflictDialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _ConflictChoice.keepBoth),
-            child: const Text('Keep both'),
+            child: Text(context.l10n.keepBoth),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _ConflictChoice.overwrite),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Overwrite with my version'),
+            child: Text(context.l10n.overwriteWithMyVersion),
           ),
         ],
       ),
@@ -664,8 +652,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     await ref.read(draftsNotifierProvider.notifier).saveDraft(myDraft);
     if (!mounted) return;
 
-    const savedNote = 'Your version was saved to drafts';
-
     // 2. Fetch the remote version (content + current sha)
     final configState = ref.read(configNotifierProvider);
     final config = configState is ConfigLoaded ? configState.config : null;
@@ -674,8 +660,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             ? '${ContentService.cleanDir(config.postsPath)}/${originalPost.fileName}'
             : null);
     if (config == null || path == null) {
-      _showMediaGateSnack(
-          '$savedNote, but the GitHub version could not be located');
+      _showMediaGateSnack(context.l10n.savedButRemoteNotLocated);
       return;
     }
 
@@ -697,8 +682,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       );
     } catch (e) {
       if (mounted) {
-        _showMediaGateSnack(
-            '$savedNote, but the GitHub version could not be loaded: $e');
+        _showMediaGateSnack(context.l10n.savedButRemoteNotLoaded('$e'));
       }
       return;
     }
@@ -723,10 +707,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _autoSaveTimer?.cancel();
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('$savedNote - now showing the GitHub version'),
+      SnackBar(
+        content: Text(context.l10n.savedNowShowingRemote),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Color(0xFF1A2F23),
       ),
     );
   }
@@ -759,8 +742,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             return true;
           case _MediaGateChoice.wait:
             if (!await _waitForUploads(pending)) {
-              _showMediaGateSnack(
-                  'Uploads are taking too long - try publishing again in a moment');
+              if (!mounted) return false;
+              _showMediaGateSnack(context.l10n.uploadsTakingTooLong);
               return false;
             }
             continue; // Re-check: a waited upload may have failed
@@ -780,8 +763,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             for (final filename in failed) imageManager.retryUpload(filename),
           ];
           if (!await _showUploadWaitDialog(Future.wait(retries))) {
-            _showMediaGateSnack(
-                'Uploads are taking too long - try publishing again in a moment');
+            if (!mounted) return false;
+            _showMediaGateSnack(context.l10n.uploadsTakingTooLong);
             return false;
           }
           continue; // Re-check: retries may have failed again
@@ -826,22 +809,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       builder: (context) {
         dialogContext = context;
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A2F23),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          content: const Row(
+          content: Row(
             children: [
               SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFFE8A87C),
+                  color: context.colorScheme.primary,
                 ),
               ),
-              SizedBox(width: 16),
-              Expanded(child: Text('Waiting for uploads...')),
+              const SizedBox(width: 16),
+              Expanded(child: Text(context.l10n.waitingForUploads)),
             ],
           ),
         );
@@ -872,33 +851,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return showDialog<_MediaGateChoice>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Media still uploading'),
-        content: Text(
-          count == 1
-              ? '1 file in this post is still uploading. Wait for it to finish?'
-              : '$count files in this post are still uploading. '
-                  'Wait for them to finish?',
-        ),
+        title: Text(context.l10n.mediaStillUploadingTitle),
+        content: Text(context.l10n.pendingUploadsBody(count)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () =>
                 Navigator.pop(context, _MediaGateChoice.publishAnyway),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Publish anyway'),
+            child: Text(context.l10n.publishAnyway),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _MediaGateChoice.wait),
-            child: const Text('Wait'),
+            child: Text(context.l10n.waitAction),
           ),
         ],
       ),
@@ -909,32 +879,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return showDialog<_MediaGateChoice>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Media uploads failed'),
+        title: Text(context.l10n.mediaUploadsFailedTitle),
         content: Text(
-          'These files failed to upload:\n\n'
-          '${failed.map((filename) => '• $filename').join('\n')}\n\n'
-          'Publishing now would leave broken media in the post.',
+          context.l10n.failedUploadsBody(
+            failed.map((filename) => '• $filename').join('\n'),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () =>
                 Navigator.pop(context, _MediaGateChoice.publishAnyway),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+              foregroundColor: context.colorScheme.error,
             ),
-            child: const Text('Publish anyway'),
+            child: Text(context.l10n.publishAnyway),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, _MediaGateChoice.retry),
-            child: const Text('Retry uploads'),
+            child: Text(context.l10n.retryUploads),
           ),
         ],
       ),
@@ -956,34 +922,30 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   Future<bool?> _showImageSourceSheet() {
     return showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: const Color(0xFF1A2F23),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.photo_library_rounded,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
               ),
-              title: const Text(
-                'Gallery',
-                style: TextStyle(color: Color(0xFFF5F5F0)),
+              title: Text(
+                context.l10n.galleryOption,
+                style: TextStyle(color: context.colorScheme.onSurface),
               ),
               onTap: () => Navigator.pop(context, false),
             ),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.photo_camera_rounded,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
               ),
-              title: const Text(
-                'Camera',
-                style: TextStyle(color: Color(0xFFF5F5F0)),
+              title: Text(
+                context.l10n.cameraOption,
+                style: TextStyle(color: context.colorScheme.onSurface),
               ),
               onTap: () => Navigator.pop(context, true),
             ),
@@ -1028,16 +990,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           SnackBar(
             content: Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFFE8A87C),
+                    color: context.colorScheme.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text('Uploading image...'),
+                Text(context.l10n.uploadingImage),
               ],
             ),
             behavior: SnackBarBehavior.floating,
@@ -1049,9 +1011,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add image: $e'),
+            // Background is overridden: take the foreground from onError so
+            // the message stays readable in both themes
+            content: Text(
+              context.l10n.failedToAddImage('$e'),
+              style: TextStyle(color: context.colorScheme.onError),
+            ),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFE57373),
+            backgroundColor: context.colorScheme.error,
           ),
         );
       }
@@ -1078,16 +1045,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             SnackBar(
               content: Row(
                 children: [
-                  const SizedBox(
+                  SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xFFE8A87C),
+                      color: context.colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Text('Compressing video...'),
+                  Text(context.l10n.compressingVideo),
                 ],
               ),
               behavior: SnackBarBehavior.floating,
@@ -1123,16 +1090,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           SnackBar(
             content: Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFFE8A87C),
+                    color: context.colorScheme.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text('Uploading video...'),
+                Text(context.l10n.uploadingVideo),
               ],
             ),
             behavior: SnackBarBehavior.floating,
@@ -1145,10 +1112,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            // Size-limit / compression errors carry their own message
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            // Size-limit / compression errors carry their own message.
+            // Background is overridden, so pair it with onError.
+            content: Text(
+              e.toString().replaceFirst('Exception: ', ''),
+              style: TextStyle(color: context.colorScheme.onError),
+            ),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFE57373),
+            backgroundColor: context.colorScheme.error,
           ),
         );
       }
@@ -1196,7 +1167,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       },
       child: Scaffold(
         body: Container(
-          decoration: AppTheme.backgroundGradient,
+          decoration: AppTheme.backgroundGradient(context),
           child: SafeArea(
             child: Column(
               children: [
@@ -1234,12 +1205,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back_rounded),
-            color: const Color(0xFFA8B5A0),
+            color: context.colorScheme.onSurfaceVariant,
+            tooltip: context.l10n.commonBack,
             onPressed: _handleBack,
           ),
           Expanded(
             child: Text(
-              isNewPost ? 'New Post' : 'Edit Post',
+              isNewPost
+                  ? context.l10n.newPostAction
+                  : context.l10n.editPostTitle,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1258,8 +1232,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ),
           IconButton(
             icon: const Icon(Icons.tune_rounded),
-            color: const Color(0xFFA8B5A0),
-            tooltip: 'Post settings',
+            color: context.colorScheme.onSurfaceVariant,
+            tooltip: context.l10n.postSettingsLabel,
             onPressed: _showPostSettings,
           ),
           const SizedBox(width: 4),
@@ -1269,20 +1243,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
             child: _isPublishing
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xFF0D1B14),
+                      color: context.colorScheme.onPrimary,
                     ),
                   )
-                : const Row(
+                : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.publish_rounded, size: 18),
-                      SizedBox(width: 6),
-                      Text('Publish'),
+                      const Icon(Icons.publish_rounded, size: 18),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.publishAction),
                     ],
                   ),
           ),
@@ -1291,26 +1265,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           if (isNewPost)
             PopupMenuButton<String>(
               enabled: !_isPublishing,
-              tooltip: 'More publish options',
-              icon: const Icon(
+              tooltip: context.l10n.morePublishOptionsTooltip,
+              icon: Icon(
                 Icons.arrow_drop_down_rounded,
-                color: Color(0xFFA8B5A0),
-              ),
-              color: const Color(0xFF1A2F23),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                color: context.colorScheme.onSurfaceVariant,
               ),
               onSelected: (value) {
                 if (value == 'draft') _handleSave(asDraft: true);
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'draft',
                   child: Row(
                     children: [
-                      Icon(Icons.cloud_upload_rounded, size: 20),
-                      SizedBox(width: 12),
-                      Text('Save as draft on GitHub'),
+                      const Icon(Icons.cloud_upload_rounded, size: 20),
+                      const SizedBox(width: 12),
+                      Text(context.l10n.saveAsDraftOnGitHub),
                     ],
                   ),
                 ),
@@ -1330,25 +1300,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     switch (status) {
       case DraftSaveStatus.saving:
         icon = Icons.sync_rounded;
-        text = 'Saving...';
-        color = const Color(0xFFE8A87C);
+        text = context.l10n.statusSaving;
+        color = context.colorScheme.primary;
         showSpinner = true;
         break;
       case DraftSaveStatus.saved:
         icon = Icons.check_circle_rounded;
-        text = 'Saved';
-        color = const Color(0xFF81C784);
+        text = context.l10n.statusSaved;
+        color = context.appColors.success;
         break;
       case DraftSaveStatus.error:
         icon = Icons.error_outline_rounded;
-        text = 'Error';
-        color = const Color(0xFFE57373);
+        text = context.l10n.statusError;
+        color = context.colorScheme.error;
         break;
       case DraftSaveStatus.idle:
         if (hasUnsavedChanges) {
           icon = Icons.edit_rounded;
-          text = 'Editing';
-          color = const Color(0xFFA8B5A0);
+          text = context.l10n.editingStatus;
+          color = context.colorScheme.onSurfaceVariant;
         } else {
           // Nothing to show when idle and no changes
           return const SizedBox.shrink();
@@ -1356,37 +1326,41 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         break;
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withAlpha(25),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showSpinner)
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
+    return Semantics(
+      label: context.l10n.draftStatusSemantics(text),
+      liveRegion: true,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withAlpha(25),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showSpinner)
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: color,
+                ),
+              )
+            else
+              Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              text,
+              style: TextStyle(
                 color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
-            )
-          else
-            Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1395,23 +1369,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF162A1E),
+        color: context.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF2D4A3E).withAlpha(80),
+          color: context.colorScheme.outline.withAlpha(80),
         ),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: const Color(0xFFE8A87C),
+          color: context.colorScheme.primary,
           borderRadius: BorderRadius.circular(10),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         indicatorPadding: const EdgeInsets.all(4),
         dividerColor: Colors.transparent,
-        labelColor: const Color(0xFF0D1B14),
-        unselectedLabelColor: const Color(0xFFA8B5A0),
+        labelColor: context.colorScheme.onPrimary,
+        unselectedLabelColor: context.colorScheme.onSurfaceVariant,
         labelStyle: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
@@ -1420,14 +1394,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           fontSize: 14,
           fontWeight: FontWeight.w500,
         ),
-        tabs: const [
+        tabs: [
           Tab(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.edit_rounded, size: 18),
-                SizedBox(width: 8),
-                Text('Write'),
+                const Icon(Icons.edit_rounded, size: 18),
+                const SizedBox(width: 8),
+                Text(context.l10n.tabWrite),
               ],
             ),
           ),
@@ -1435,9 +1409,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.visibility_rounded, size: 18),
-                SizedBox(width: 8),
-                Text('Preview'),
+                const Icon(Icons.visibility_rounded, size: 18),
+                const SizedBox(width: 8),
+                Text(context.l10n.tabPreview),
               ],
             ),
           ),
@@ -1454,12 +1428,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         children: [
           // Title field
           Text(
-            'Title',
+            context.l10n.titleLabel,
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
           Container(
-            decoration: AppTheme.cardGlow,
+            decoration: AppTheme.cardGlow(context),
             child: TextField(
               controller: _titleController,
               enabled: isNewPost,
@@ -1471,15 +1445,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: isNewPost
-                    ? const Color(0xFFF5F5F0)
-                    : const Color(0xFFA8B5A0),
+                    ? context.colorScheme.onSurface
+                    : context.colorScheme.onSurfaceVariant,
               ),
               decoration: InputDecoration(
-                hintText: 'Enter post title...',
+                hintText: context.l10n.enterPostTitleHint,
                 filled: true,
                 fillColor: isNewPost
-                    ? const Color(0xFF162A1E)
-                    : const Color(0xFF162A1E).withAlpha(150),
+                    ? context.colorScheme.surfaceContainer
+                    : context.colorScheme.surfaceContainer.withAlpha(150),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -1487,19 +1461,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                    color: context.colorScheme.outline.withAlpha(80),
                   ),
                 ),
                 disabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: const Color(0xFF2D4A3E).withAlpha(40),
+                    color: context.colorScheme.outline.withAlpha(40),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE8A87C),
+                  borderSide: BorderSide(
+                    color: context.colorScheme.primary,
                     width: 2,
                   ),
                 ),
@@ -1509,11 +1483,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 ),
                 suffixIcon: !isNewPost
                     ? Tooltip(
-                        message: 'Title cannot be changed for existing posts',
+                        message: context.l10n.titleLockedTooltip,
                         child: Icon(
                           Icons.lock_rounded,
                           size: 18,
-                          color: const Color(0xFFA8B5A0).withAlpha(150),
+                          color: context.colorScheme.onSurfaceVariant.withAlpha(150),
                         ),
                       )
                     : null,
@@ -1523,10 +1497,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           if (!isNewPost) ...[
             const SizedBox(height: 6),
             Text(
-              'Title is locked for existing posts',
+              context.l10n.titleLockedNote,
               style: TextStyle(
                 fontSize: 12,
-                color: const Color(0xFFA8B5A0).withAlpha(150),
+                color: context.colorScheme.onSurfaceVariant.withAlpha(150),
               ),
             ),
           ],
@@ -1541,7 +1515,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           // so a drag scrolls the editor instead of extending a selection
           Expanded(
             child: Container(
-              decoration: AppTheme.cardGlow,
+              decoration: AppTheme.cardGlow(context),
               child: TextField(
                 controller: _bodyController,
                 focusNode: _bodyFocusNode,
@@ -1555,20 +1529,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 textInputAction: TextInputAction.newline,
                 textCapitalization: TextCapitalization.sentences,
                 spellCheckConfiguration: const SpellCheckConfiguration(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   height: 1.6,
                   fontFamily: 'monospace',
-                  color: Color(0xFFF5F5F0),
+                  color: context.colorScheme.onSurface,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Start writing your post...\n\nTip: Use Markdown for formatting!',
+                  hintText: context.l10n.bodyHint,
                   hintStyle: TextStyle(
-                    color: const Color(0xFFA8B5A0).withAlpha(150),
+                    color: context.colorScheme.onSurfaceVariant.withAlpha(150),
                     fontFamily: 'monospace',
                   ),
                   filled: true,
-                  fillColor: const Color(0xFF162A1E),
+                  fillColor: context.colorScheme.surfaceContainer,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -1576,13 +1550,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(
-                      color: const Color(0xFF2D4A3E).withAlpha(80),
+                      color: context.colorScheme.outline.withAlpha(80),
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: Color(0xFFE8A87C),
+                    borderSide: BorderSide(
+                      color: context.colorScheme.primary,
                       width: 2,
                     ),
                   ),
@@ -1600,16 +1574,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF162A1E),
+        color: context.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF2D4A3E).withAlpha(60),
+          color: context.colorScheme.outline.withAlpha(60),
         ),
       ),
       child: Row(
         children: [
           Text(
-            'Content',
+            context.l10n.contentLabel,
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const Spacer(),
@@ -1622,13 +1596,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 children: [
                   _ToolbarButton(
                     icon: Icons.undo_rounded,
-                    tooltip: 'Undo',
+                    tooltip: context.l10n.undoTooltip,
                     onPressed: undoValue.canUndo ? _undoController.undo : null,
                   ),
                   const SizedBox(width: 6),
                   _ToolbarButton(
                     icon: Icons.redo_rounded,
-                    tooltip: 'Redo',
+                    tooltip: context.l10n.redoTooltip,
                     onPressed: undoValue.canRedo ? _undoController.redo : null,
                   ),
                 ],
@@ -1639,14 +1613,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           // Keyboard dismiss button
           _ToolbarButton(
             icon: Icons.keyboard_hide_rounded,
-            tooltip: 'Hide keyboard',
+            tooltip: context.l10n.hideKeyboardTooltip,
             onPressed: () => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(width: 6),
           // Add Image button
           _ToolbarButton(
             icon: Icons.image_rounded,
-            tooltip: 'Add image',
+            tooltip: context.l10n.addImageTooltip,
             onPressed: _isPickingImage ? null : _handleAddImage,
             isLoading: _isPickingImage,
           ),
@@ -1654,7 +1628,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           // Add Video button
           _ToolbarButton(
             icon: Icons.videocam_rounded,
-            tooltip: 'Add video',
+            tooltip: context.l10n.addVideoTooltip,
             onPressed: _isPickingVideo ? null : _handleAddVideo,
             isLoading: _isPickingVideo,
           ),
@@ -1662,7 +1636,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           // Markdown help button
           _ToolbarButton(
             icon: Icons.help_outline_rounded,
-            tooltip: 'Markdown help',
+            tooltip: context.l10n.markdownHelpTooltip,
             onPressed: _showMarkdownHelp,
           ),
         ],
@@ -1684,18 +1658,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 Icon(
                   Icons.article_outlined,
                   size: 64,
-                  color: const Color(0xFFA8B5A0).withAlpha(100),
+                  color: context.colorScheme.onSurfaceVariant.withAlpha(100),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Nothing to preview yet',
+                  context.l10n.nothingToPreviewYet,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFFA8B5A0),
+                        color: context.colorScheme.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Switch to the Write tab and add some content',
+                  context.l10n.switchToWriteTab,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -1712,10 +1686,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               if (editorState.title.isNotEmpty) ...[
                 Text(
                   editorState.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFFF5F5F0),
+                    color: context.colorScheme.onSurface,
                     height: 1.3,
                   ),
                 ),
@@ -1725,15 +1699,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   // for brand-new posts
                   editorState.originalPost != null
                       ? _formatPostDate(editorState.originalPost!.date)
-                      : _formatDate(DateTime.now()),
-                  style: const TextStyle(
+                      : _formatDate(context, DateTime.now()),
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFFA8B5A0),
+                    color: context.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const Divider(
+                Divider(
                   height: 32,
-                  color: Color(0xFF2D4A3E),
+                  color: context.colorScheme.outline,
                 ),
               ],
 
@@ -1742,10 +1716,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF162A1E),
+                  color: context.colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                    color: context.colorScheme.outline.withAlpha(80),
                   ),
                 ),
                 child: MarkdownBody(
@@ -1801,7 +1775,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         fit: BoxFit.cover,
                         width: double.infinity,
                         errorBuilder: (context, error, stackTrace) =>
-                            _buildImageError(alt ?? 'Image'),
+                            _buildImageError(alt ?? context.l10n.imageFallbackAlt),
                       )
                     : _buildNetworkImage(resolvedPath, alt, authHeaders),
               ),
@@ -1826,7 +1800,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   /// Rounded card standing in for a raw-HTML <video> embed: play badge,
   /// filename, and the same upload overlays as images
   Widget _buildVideoPlaceholder(String filename) {
-    final label = filename.isEmpty ? 'video' : filename;
+    final label =
+        filename.isEmpty ? context.l10n.videoFallbackLabel : filename;
 
     return Consumer(
       builder: (context, ref, _) {
@@ -1843,10 +1818,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 height: 180,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1B14),
+                  color: context.colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFF2D4A3E).withAlpha(100),
+                    color: context.colorScheme.outline.withAlpha(100),
                   ),
                 ),
                 child: Column(
@@ -1855,22 +1830,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2D4A3E).withAlpha(120),
+                        color: context.colorScheme.outline.withAlpha(120),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.play_arrow_rounded,
                         size: 32,
-                        color: Color(0xFFE8A87C),
+                        color: context.colorScheme.primary,
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontFamily: 'monospace',
-                        color: Color(0xFFA8B5A0),
+                        color: context.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1899,7 +1874,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         color: Colors.black54,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Center(
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1908,13 +1883,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               height: 24,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
               ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
-              'Uploading...',
-              style: TextStyle(
+              context.l10n.uploadingEllipsis,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
               ),
@@ -1929,8 +1904,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   Widget _buildUploadErrorOverlay(String filename, ImageManager imageManager) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFFE57373),
+      decoration: BoxDecoration(
+        color: context.colorScheme.error,
         borderRadius: BorderRadius.vertical(
           bottom: Radius.circular(12),
         ),
@@ -1943,24 +1918,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             size: 16,
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Upload failed',
-              style: TextStyle(
+              context.l10n.uploadFailed,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
               ),
             ),
           ),
-          GestureDetector(
-            onTap: () => imageManager.retryUpload(filename),
-            child: const Text(
-              'Retry',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                decoration: TextDecoration.underline,
+          // Real button (48dp tap target + TalkBack label), not a bare
+          // GestureDetector on text
+          TextButton(
+            onPressed: () => imageManager.retryUpload(filename),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              minimumSize: const Size(48, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              tapTargetSize: MaterialTapTargetSize.padded,
+            ),
+            child: Semantics(
+              label: context.l10n.retryUploadOf(filename),
+              child: Text(
+                context.l10n.commonRetry,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white,
+                ),
               ),
             ),
           ),
@@ -1994,7 +1980,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         return _buildImageLoading();
       },
       errorBuilder: (context, error, stackTrace) =>
-          _buildImageError(alt ?? 'Image'),
+          _buildImageError(alt ?? context.l10n.imageFallbackAlt),
     );
   }
 
@@ -2002,12 +1988,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return Container(
       height: 200,
       decoration: BoxDecoration(
-        color: const Color(0xFF2D4A3E).withAlpha(50),
+        color: context.colorScheme.outline.withAlpha(50),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Center(
+      child: Center(
         child: CircularProgressIndicator(
-          color: Color(0xFFE8A87C),
+          color: context.colorScheme.primary,
         ),
       ),
     );
@@ -2017,26 +2003,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return Container(
       height: 150,
       decoration: BoxDecoration(
-        color: const Color(0xFF2D4A3E).withAlpha(50),
+        color: context.colorScheme.outline.withAlpha(50),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE57373).withAlpha(50),
+          color: context.colorScheme.error.withAlpha(50),
         ),
       ),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.broken_image_rounded,
-              color: Color(0xFFA8B5A0),
+              color: context.colorScheme.onSurfaceVariant,
               size: 32,
             ),
             const SizedBox(height: 8),
             Text(
               alt,
-              style: const TextStyle(
-                color: Color(0xFFA8B5A0),
+              style: TextStyle(
+                color: context.colorScheme.onSurfaceVariant,
                 fontSize: 12,
               ),
             ),
@@ -2048,65 +2034,65 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   MarkdownStyleSheet _buildMarkdownStyleSheet() {
     return MarkdownStyleSheet(
-      p: const TextStyle(
+      p: TextStyle(
         fontSize: 15,
         height: 1.7,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
       ),
-      h1: const TextStyle(
+      h1: TextStyle(
         fontSize: 26,
         fontWeight: FontWeight.w700,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
         height: 1.4,
       ),
-      h2: const TextStyle(
+      h2: TextStyle(
         fontSize: 22,
         fontWeight: FontWeight.w600,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
         height: 1.4,
       ),
-      h3: const TextStyle(
+      h3: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
         height: 1.4,
       ),
-      h4: const TextStyle(
+      h4: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
         height: 1.4,
       ),
-      h5: const TextStyle(
+      h5: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
         height: 1.4,
       ),
-      h6: const TextStyle(
+      h6: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: Color(0xFFA8B5A0),
+        color: context.colorScheme.onSurfaceVariant,
         height: 1.4,
       ),
-      em: const TextStyle(
+      em: TextStyle(
         fontStyle: FontStyle.italic,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
       ),
-      strong: const TextStyle(
+      strong: TextStyle(
         fontWeight: FontWeight.w700,
-        color: Color(0xFFF5F5F0),
+        color: context.colorScheme.onSurface,
       ),
-      blockquote: const TextStyle(
+      blockquote: TextStyle(
         fontSize: 15,
         fontStyle: FontStyle.italic,
-        color: Color(0xFFA8B5A0),
+        color: context.colorScheme.onSurfaceVariant,
         height: 1.6,
       ),
       blockquoteDecoration: BoxDecoration(
         border: Border(
           left: BorderSide(
-            color: const Color(0xFFE8A87C).withAlpha(150),
+            color: context.colorScheme.primary.withAlpha(150),
             width: 4,
           ),
         ),
@@ -2115,30 +2101,30 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       code: TextStyle(
         fontFamily: 'monospace',
         fontSize: 13,
-        color: const Color(0xFFE8A87C),
-        backgroundColor: const Color(0xFF2D4A3E).withAlpha(100),
+        color: context.colorScheme.primary,
+        backgroundColor: context.colorScheme.outline.withAlpha(100),
       ),
       codeblockDecoration: BoxDecoration(
-        color: const Color(0xFF0D1B14),
+        color: context.colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: const Color(0xFF2D4A3E).withAlpha(100),
+          color: context.colorScheme.outline.withAlpha(100),
         ),
       ),
       codeblockPadding: const EdgeInsets.all(16),
-      listBullet: const TextStyle(
-        color: Color(0xFFE8A87C),
+      listBullet: TextStyle(
+        color: context.colorScheme.primary,
       ),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: const Color(0xFF2D4A3E).withAlpha(150),
+            color: context.colorScheme.outline.withAlpha(150),
             width: 1,
           ),
         ),
       ),
-      a: const TextStyle(
-        color: Color(0xFFE8A87C),
+      a: TextStyle(
+        color: context.colorScheme.primary,
         decoration: TextDecoration.underline,
       ),
     );
@@ -2148,10 +2134,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1A2F23),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) => const _PostSettingsSheet(),
     );
   }
@@ -2159,10 +2141,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void _showMarkdownHelp() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A2F23),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -2171,28 +2149,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.help_outline_rounded,
-                  color: Color(0xFFE8A87C),
+                  color: context.colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Markdown Quick Reference',
+                  context.l10n.markdownQuickReference,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            _buildMarkdownHelpRow('# Heading 1', 'Large heading'),
-            _buildMarkdownHelpRow('## Heading 2', 'Medium heading'),
-            _buildMarkdownHelpRow('**bold**', 'Bold text'),
-            _buildMarkdownHelpRow('*italic*', 'Italic text'),
-            _buildMarkdownHelpRow('[link](url)', 'Hyperlink'),
-            _buildMarkdownHelpRow('![alt](url)', 'Image'),
-            _buildMarkdownHelpRow('- item', 'Bullet list'),
-            _buildMarkdownHelpRow('1. item', 'Numbered list'),
-            _buildMarkdownHelpRow('> quote', 'Block quote'),
-            _buildMarkdownHelpRow('`code`', 'Inline code'),
+            _buildMarkdownHelpRow('# Heading 1', context.l10n.mdLargeHeading),
+            _buildMarkdownHelpRow('## Heading 2', context.l10n.mdMediumHeading),
+            _buildMarkdownHelpRow('**bold**', context.l10n.mdBoldText),
+            _buildMarkdownHelpRow('*italic*', context.l10n.mdItalicText),
+            _buildMarkdownHelpRow('[link](url)', context.l10n.mdHyperlink),
+            _buildMarkdownHelpRow('![alt](url)', context.l10n.mdImage),
+            _buildMarkdownHelpRow('- item', context.l10n.mdBulletList),
+            _buildMarkdownHelpRow('1. item', context.l10n.mdNumberedList),
+            _buildMarkdownHelpRow('> quote', context.l10n.mdBlockQuote),
+            _buildMarkdownHelpRow('`code`', context.l10n.mdInlineCode),
             const SizedBox(height: 16),
           ],
         ),
@@ -2209,24 +2187,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             width: 120,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0D1B14),
+              color: context.colorScheme.surface,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               syntax,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
               ),
             ),
           ),
           const SizedBox(width: 16),
           Text(
             description,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: Color(0xFFA8B5A0),
+              color: context.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -2238,15 +2216,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   String _formatPostDate(String date) {
     DateTime? parsed = DateTime.tryParse(date);
     parsed ??= date.length >= 10 ? DateTime.tryParse(date.substring(0, 10)) : null;
-    return parsed != null ? _formatDate(parsed) : date;
+    return parsed != null ? _formatDate(context, parsed) : date;
   }
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  String _formatDate(BuildContext context, DateTime date) {
+    return DateFormat.yMMMMd(context.l10n.localeName).format(date);
   }
 }
 
@@ -2302,13 +2276,10 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
   }
 
   String _formatDateTime(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} · $hh:$mm';
+    final locale = context.l10n.localeName;
+    final date = DateFormat.yMMMd(locale).format(dt);
+    final time = DateFormat.Hm(locale).format(dt);
+    return '$date · $time';
   }
 
   @override
@@ -2332,13 +2303,13 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.tune_rounded,
-                  color: Color(0xFFE8A87C),
+                  color: context.colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Post settings',
+                  context.l10n.postSettingsLabel,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ],
@@ -2347,12 +2318,12 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
 
             // Publication date + time
             Text(
-              'Publication date',
+              context.l10n.publicationDateLabel,
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 8),
             Material(
-              color: const Color(0xFF162A1E),
+              color: context.colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 onTap: _pickDateTime,
@@ -2365,30 +2336,30 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFF2D4A3E).withAlpha(80),
+                      color: context.colorScheme.outline.withAlpha(80),
                     ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.event_rounded,
                         size: 18,
-                        color: Color(0xFFE8A87C),
+                        color: context.colorScheme.primary,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _formatDateTime(effectiveDate),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Color(0xFFF5F5F0),
+                            color: context.colorScheme.onSurface,
                           ),
                         ),
                       ),
                       Icon(
                         Icons.edit_rounded,
                         size: 16,
-                        color: const Color(0xFFA8B5A0).withAlpha(150),
+                        color: context.colorScheme.onSurfaceVariant.withAlpha(150),
                       ),
                     ],
                   ),
@@ -2399,11 +2370,11 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
               const SizedBox(height: 6),
               Text(
                 editorState.originalDate != null
-                    ? 'Current post date - tap to change'
-                    : 'Set automatically when you publish - tap to override',
+                    ? context.l10n.currentPostDateHint
+                    : context.l10n.dateSetAutomaticallyHint,
                 style: TextStyle(
                   fontSize: 12,
-                  color: const Color(0xFFA8B5A0).withAlpha(150),
+                  color: context.colorScheme.onSurfaceVariant.withAlpha(150),
                 ),
               ),
             ],
@@ -2411,26 +2382,26 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
 
             // Layout
             Text(
-              'Layout',
+              context.l10n.layoutLabel,
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _layoutController,
               onChanged: controller.updateLayout,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontFamily: 'monospace',
-                color: Color(0xFFF5F5F0),
+                color: context.colorScheme.onSurface,
               ),
               decoration: InputDecoration(
-                hintText: 'Leave empty to use the site default',
+                hintText: context.l10n.layoutEmptyHint,
                 hintStyle: TextStyle(
                   fontSize: 13,
-                  color: const Color(0xFFA8B5A0).withAlpha(150),
+                  color: context.colorScheme.onSurfaceVariant.withAlpha(150),
                 ),
                 filled: true,
-                fillColor: const Color(0xFF162A1E),
+                fillColor: context.colorScheme.surfaceContainer,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -2443,13 +2414,13 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                    color: context.colorScheme.outline.withAlpha(80),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE8A87C),
+                  borderSide: BorderSide(
+                    color: context.colorScheme.primary,
                     width: 2,
                   ),
                 ),
@@ -2459,8 +2430,8 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
 
             // Categories
             _ChipEditor(
-              label: 'Categories',
-              hint: 'Add a category...',
+              label: context.l10n.categoriesLabel,
+              hint: context.l10n.addCategoryHint,
               values: editorState.categories,
               onChanged: controller.updateCategories,
             ),
@@ -2468,8 +2439,8 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
 
             // Tags
             _ChipEditor(
-              label: 'Tags',
-              hint: 'Add a tag...',
+              label: context.l10n.tagsLabel,
+              hint: context.l10n.addTagHint,
               values: editorState.tags,
               onChanged: controller.updateTags,
             ),
@@ -2480,14 +2451,14 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
               Row(
                 children: [
                   Text(
-                    'Custom fields',
+                    context.l10n.customFieldsLabel,
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                   const SizedBox(width: 8),
-                  const Icon(
+                  Icon(
                     Icons.lock_outline_rounded,
                     size: 14,
-                    color: Color(0xFFA8B5A0),
+                    color: context.colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
@@ -2496,28 +2467,28 @@ class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1B14),
+                  color: context.colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                    color: context.colorScheme.outline.withAlpha(80),
                   ),
                 ),
                 child: Text(
                   editorState.passthrough.values.join('\n'),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 12,
                     height: 1.5,
-                    color: Color(0xFFA8B5A0),
+                    color: context.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'These fields are preserved as-is when you publish',
+                context.l10n.customFieldsPreservedNote,
                 style: TextStyle(
                   fontSize: 12,
-                  color: const Color(0xFFA8B5A0).withAlpha(150),
+                  color: context.colorScheme.onSurfaceVariant.withAlpha(150),
                 ),
               ),
             ],
@@ -2594,17 +2565,17 @@ class _ChipEditorState extends State<_ChipEditor> {
                 Chip(
                   label: Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFFF5F5F0),
+                      color: context.colorScheme.onSurface,
                     ),
                   ),
-                  backgroundColor: const Color(0xFF2D4A3E),
+                  backgroundColor: context.colorScheme.outline,
                   side: BorderSide.none,
-                  deleteIcon: const Icon(
+                  deleteIcon: Icon(
                     Icons.close_rounded,
                     size: 16,
-                    color: Color(0xFFA8B5A0),
+                    color: context.colorScheme.onSurfaceVariant,
                   ),
                   onDeleted: () => _remove(value),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2619,18 +2590,18 @@ class _ChipEditorState extends State<_ChipEditor> {
           focusNode: _focusNode,
           onSubmitted: _add,
           textInputAction: TextInputAction.done,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
-            color: Color(0xFFF5F5F0),
+            color: context.colorScheme.onSurface,
           ),
           decoration: InputDecoration(
             hintText: widget.hint,
             hintStyle: TextStyle(
               fontSize: 13,
-              color: const Color(0xFFA8B5A0).withAlpha(150),
+              color: context.colorScheme.onSurfaceVariant.withAlpha(150),
             ),
             filled: true,
-            fillColor: const Color(0xFF162A1E),
+            fillColor: context.colorScheme.surfaceContainer,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
@@ -2643,21 +2614,21 @@ class _ChipEditorState extends State<_ChipEditor> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: const Color(0xFF2D4A3E).withAlpha(80),
+                color: context.colorScheme.outline.withAlpha(80),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFE8A87C),
+              borderSide: BorderSide(
+                color: context.colorScheme.primary,
                 width: 2,
               ),
             ),
             suffixIcon: IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.add_rounded,
                 size: 20,
-                color: Color(0xFFE8A87C),
+                color: context.colorScheme.primary,
               ),
               onPressed: () => _add(_controller.text),
             ),
@@ -2703,24 +2674,24 @@ class _ToolbarButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF2D4A3E).withAlpha(60),
+            color: context.colorScheme.outline.withAlpha(60),
             borderRadius: BorderRadius.circular(8),
           ),
           child: isLoading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFFE8A87C),
+                    color: context.colorScheme.primary,
                   ),
                 )
               : Icon(
                   icon,
                   size: 16,
                   color: isDisabled
-                      ? const Color(0xFFA8B5A0).withAlpha(90)
-                      : const Color(0xFFE8A87C),
+                      ? context.colorScheme.onSurfaceVariant.withAlpha(90)
+                      : context.colorScheme.primary,
                 ),
         ),
       ),

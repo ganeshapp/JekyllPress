@@ -24,7 +24,6 @@ class BlogPostAdapter extends TypeAdapter<BlogPost> {
       date: fields[3] as String,
       rawFrontmatter: fields[4] as String?,
       bodyContent: fields[5] as String,
-      isLocalDraft: fields[6] as bool,
       lastSynced: fields[7] as DateTime?,
     );
   }
@@ -32,7 +31,7 @@ class BlogPostAdapter extends TypeAdapter<BlogPost> {
   @override
   void write(BinaryWriter writer, BlogPost obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.sha)
       ..writeByte(1)
@@ -47,8 +46,6 @@ class BlogPostAdapter extends TypeAdapter<BlogPost> {
       ..write(obj.rawFrontmatter)
       ..writeByte(5)
       ..write(obj.bodyContent)
-      ..writeByte(6)
-      ..write(obj.isLocalDraft)
       ..writeByte(7)
       ..write(obj.lastSynced);
   }
