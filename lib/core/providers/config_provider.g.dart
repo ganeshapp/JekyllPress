@@ -248,7 +248,7 @@ final appConfigBoxProvider = AutoDisposeProvider<Box<AppConfig>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AppConfigBoxRef = AutoDisposeProviderRef<Box<AppConfig>>;
-String _$configNotifierHash() => r'58f171c8fdb40a20810f0634ba39d11752804dd1';
+String _$configNotifierHash() => r'2cc100c4674c4e1a95a0755f7c12aae718f678f8';
 
 /// Notifier for managing app configuration.
 ///

@@ -64,12 +64,23 @@ class ContentService {
       .replaceAll(RegExp(r'^/+'), '')
       .replaceAll(RegExp(r'/+$'), '');
 
-  /// List markdown files in the ACTIVE content dir via the git trees API
-  /// (recursive), which sees _posts subfolders (year/category) and is not
-  /// subject to the contents API's 1000-entry cap. When GitHub truncates
-  /// the tree, falls back to a per-directory contents listing.
+  /// Dirs one sync covers: the active content dir plus the remote Jekyll
+  /// drafts dir (so _drafts files ride along in the same git-trees call).
+  /// The drafts dir is dropped when it duplicates the active dir.
+  static List<String> contentDirsToSync(AppConfig config) {
+    final active = cleanDir(config.activeContentDir);
+    final drafts = cleanDir(config.draftsPath);
+    if (drafts.isEmpty || drafts == active) return [active];
+    return [active, drafts];
+  }
+
+  /// List markdown files in the ACTIVE content dir AND the remote drafts
+  /// dir via the git trees API (recursive), which sees _posts subfolders
+  /// (year/category) and is not subject to the contents API's 1000-entry
+  /// cap. When GitHub truncates the tree, falls back to a per-directory
+  /// contents listing.
   Future<List<GitHubFileEntry>> fetchPostsList(AppConfig config) async {
-    final dir = cleanDir(config.activeContentDir);
+    final dirs = contentDirsToSync(config);
     try {
       final response = await _dio.get(
         '/repos/${config.repoOwner}/${config.repoName}'
@@ -86,15 +97,22 @@ class ContentService {
               'ContentService: git tree for ${config.repoOwner}/'
               '${config.repoName}@${config.branch} is truncated - '
               'falling back to per-directory contents listing');
-          return _fetchDirRecursive(config, dir);
+          // Dedupe by path in case the dirs overlap (nested configs)
+          final byPath = <String, GitHubFileEntry>{};
+          for (final dir in dirs) {
+            for (final entry in await _fetchDirRecursive(config, dir)) {
+              byPath[entry.path] = entry;
+            }
+          }
+          return byPath.values.toList();
         }
         final tree = (data['tree'] as List?) ?? const [];
         return tree
             .map((t) => GitHubFileEntry.fromTreeJson(t as Map<String, dynamic>))
             .where((f) =>
                 f.type == 'blob' &&
-                f.path.startsWith('$dir/') &&
-                f.isMarkdown)
+                f.isMarkdown &&
+                dirs.any((dir) => f.path.startsWith('$dir/')))
             .toList();
       }
       return [];

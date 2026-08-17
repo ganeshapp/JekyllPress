@@ -21,6 +21,31 @@ Box<BlogPost> postsBox(Ref ref) {
   return Hive.box<BlogPost>('posts_box');
 }
 
+/// True when [post] is a Jekyll draft living under [config.draftsPath]
+/// on GitHub.
+///
+/// DESIGN: nothing extra is stored - remote drafts are synced and cached
+/// exactly like posts (keyed by filePath), and the draft-ness is DERIVED
+/// from the stored path wherever it is needed. This avoids a Hive
+/// migration and can never disagree with where the file actually lives.
+bool isRemoteDraft(BlogPost post, AppConfig config) {
+  final path = post.filePath;
+  if (path == null || post.isLocalDraft) return false;
+  return path.startsWith('${ContentService.cleanDir(config.draftsPath)}/');
+}
+
+/// Case-insensitive dashboard search: keeps posts whose title or body
+/// contains [query] as a substring. An empty/whitespace query keeps all.
+List<BlogPost> filterPostsByQuery(List<BlogPost> posts, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return posts;
+  return posts
+      .where((p) =>
+          p.title.toLowerCase().contains(q) ||
+          p.bodyContent.toLowerCase().contains(q))
+      .toList();
+}
+
 /// State for posts list
 sealed class PostsState {
   const PostsState();
@@ -295,6 +320,28 @@ class PostsNotifier extends _$PostsNotifier {
         lastSynced: DateTime.now(),
       );
     }
+  }
+
+  /// Remove a post from the cache and state (after it was deleted or
+  /// moved on GitHub). The next sync would drop it anyway; this keeps
+  /// the UI consistent immediately.
+  Future<void> removePost(BlogPost post) async {
+    final key = _cacheKey(post);
+    if (key == null) return;
+
+    final box = ref.read(postsBoxProvider);
+    await box.delete(key);
+
+    final currentPosts = switch (state) {
+      PostsLoaded(posts: final p) => p,
+      _ => <BlogPost>[],
+    };
+    final remaining =
+        currentPosts.where((p) => _cacheKey(p) != key).toList();
+    state = PostsLoaded(
+      posts: remaining,
+      lastSynced: _latestSync(remaining),
+    );
   }
 
   /// Delete a local draft

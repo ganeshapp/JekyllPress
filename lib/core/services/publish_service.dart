@@ -27,7 +27,10 @@ class PublishSuccess extends PublishResult {
 
 class PublishFailure extends PublishResult {
   final String message;
-  const PublishFailure(this.message);
+
+  /// Failure class for targeted recovery UX (see [PublishErrorKind])
+  final PublishErrorKind kind;
+  const PublishFailure(this.message, {this.kind = PublishErrorKind.generic});
 }
 
 /// Service for publishing posts to GitHub
@@ -94,7 +97,8 @@ class PublishService {
             'Too many posts with this title already exist for today. Please choose a different title.');
       }
     } catch (e) {
-      return PublishFailure('Could not check for existing posts: $e');
+      return PublishFailure('Could not check for existing posts: $e',
+          kind: publishErrorKindOf(e));
     }
 
     // Generate minimal frontmatter (title + date; layout/categories/tags
@@ -129,7 +133,8 @@ class PublishService {
           filePath: path,
           htmlUrl: url,
         ),
-      UploadFailure(message: final msg) => PublishFailure(msg),
+      UploadFailure(message: final msg, kind: final kind) =>
+        PublishFailure(msg, kind: kind),
     };
   }
 
@@ -142,6 +147,10 @@ class PublishService {
   /// non-null params replace the modeled keys ('' / empty list removes the
   /// key), and every unmodeled entry passes through verbatim. A date edit
   /// changes the front matter date but NEVER the filename.
+  ///
+  /// [force] resolves a conflict by overwriting: the file's current sha
+  /// is fetched and used so the write wins over remote edits (the user
+  /// chose 'Overwrite with my version' in the conflict dialog).
   Future<PublishResult> updatePost({
     required AppConfig config,
     required BlogPost originalPost,
@@ -150,6 +159,7 @@ class PublishService {
     String? layout,
     List<String>? categories,
     List<String>? tags,
+    bool force = false,
   }) async {
     if (originalPost.fileName == null) {
       return const PublishFailure('Cannot update post without filename');
@@ -236,6 +246,7 @@ class PublishService {
       content: fullContent,
       existingSha: originalPost.sha,
       commitMessage: 'Update post: ${originalPost.title}',
+      force: force,
     );
 
     return switch (result) {
@@ -245,7 +256,8 @@ class PublishService {
           filePath: path,
           htmlUrl: url,
         ),
-      UploadFailure(message: final msg) => PublishFailure(msg),
+      UploadFailure(message: final msg, kind: final kind) =>
+        PublishFailure(msg, kind: kind),
     };
   }
 

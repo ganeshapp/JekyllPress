@@ -34,6 +34,71 @@ void main() {
     });
   });
 
+  group('preprocessPreviewMarkdown', () {
+    test('replaces a div-wrapped video block with a placeholder image', () {
+      const markdown = 'Before\n\n'
+          '<div style="text-align: center;">\n'
+          '  <video autoplay loop muted playsinline controls '
+          'style="max-width: 100%; border-radius: 12px;">\n'
+          '    <source src="/assets/images/vid_20260817_120000_123.mp4" '
+          'type="video/mp4">\n'
+          '  </video>\n'
+          '</div>\n\nAfter';
+
+      expect(
+        preprocessPreviewMarkdown(markdown),
+        'Before\n\n'
+        '![video](jekyllpress-video:/vid_20260817_120000_123.mp4)\n\n'
+        'After',
+      );
+    });
+
+    test('replaces a bare video block (no wrapping div)', () {
+      const markdown = '<video controls>\n'
+          '  <source src="/assets/images/vid_1.mp4" type="video/mp4">\n'
+          '</video>';
+
+      expect(
+        preprocessPreviewMarkdown(markdown),
+        '![video](jekyllpress-video:/vid_1.mp4)',
+      );
+    });
+
+    test('preserves filename case (owner-style uppercase names)', () {
+      const markdown = '<div style="text-align: center;">\n'
+          '  <video autoplay loop muted playsinline controls '
+          'style="max-width: 300px; border-radius: 12px;">\n'
+          '    <source src="/assets/images/VID-20260222-WA0001.mp4" '
+          'type="video/mp4">\n'
+          '  </video>\n'
+          '</div>';
+
+      expect(
+        preprocessPreviewMarkdown(markdown),
+        '![video](jekyllpress-video:/VID-20260222-WA0001.mp4)',
+      );
+    });
+
+    test('replaces every video block independently', () {
+      const markdown = '<video><source src="/a/one.mp4"></video>\n\n'
+          'middle\n\n'
+          '<video><source src="/a/two.mp4"></video>';
+
+      expect(
+        preprocessPreviewMarkdown(markdown),
+        '![video](jekyllpress-video:/one.mp4)\n\n'
+        'middle\n\n'
+        '![video](jekyllpress-video:/two.mp4)',
+      );
+    });
+
+    test('leaves markdown without video blocks untouched', () {
+      const markdown = '# Title\n\nSome *text* and ![img](/assets/x.jpg)\n\n'
+          '<div>plain html without video</div>';
+      expect(preprocessPreviewMarkdown(markdown), markdown);
+    });
+  });
+
   group('image providers with config', () {
     late Directory tempDir;
     late Box<AppConfig> configBox;
@@ -87,6 +152,52 @@ void main() {
             .generateMarkdownImage('img_1.jpg', alt: 'photo');
 
         expect(markdown, '![photo](/myrepo/assets/images/img_1.jpg)');
+      });
+    });
+
+    group('ImageManager.generateVideoEmbed', () {
+      test('root site (baseurl "") emits a root-relative src', () async {
+        await putConfig(baseurl: '');
+
+        final embed = container
+            .read(imageManagerProvider.notifier)
+            .generateVideoEmbed('vid_1.mp4');
+
+        expect(
+          embed,
+          '<div style="text-align: center;">\n'
+          '  <video autoplay loop muted playsinline controls '
+          'style="max-width: 100%; border-radius: 12px;">\n'
+          '    <source src="/assets/images/vid_1.mp4" type="video/mp4">\n'
+          '  </video>\n'
+          '</div>',
+        );
+      });
+
+      test('project site (baseurl "/myrepo") prefixes the baseurl', () async {
+        await putConfig(baseurl: '/myrepo');
+
+        final embed = container
+            .read(imageManagerProvider.notifier)
+            .generateVideoEmbed('vid_1.mp4');
+
+        expect(
+          embed,
+          contains('src="/myrepo/assets/images/vid_1.mp4"'),
+        );
+      });
+
+      test('round-trips through preprocessPreviewMarkdown', () async {
+        await putConfig(baseurl: '/myrepo');
+
+        final embed = container
+            .read(imageManagerProvider.notifier)
+            .generateVideoEmbed('vid_1.mp4');
+
+        expect(
+          preprocessPreviewMarkdown('intro\n\n$embed\n\noutro'),
+          'intro\n\n![video](jekyllpress-video:/vid_1.mp4)\n\noutro',
+        );
       });
     });
 

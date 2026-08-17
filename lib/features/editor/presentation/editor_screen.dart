@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
 import '../../../core/providers/config_provider.dart';
@@ -12,7 +14,12 @@ import '../../../core/providers/editor_provider.dart';
 import '../../../core/providers/image_provider.dart';
 import '../../../core/providers/posts_provider.dart';
 import '../../../core/providers/publish_provider.dart';
+import '../../../core/providers/queue_provider.dart';
+import '../../../core/services/content_service.dart';
+import '../../../core/services/github_upload_service.dart';
+import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/frontmatter_parser.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
   final BlogPost? post;
@@ -37,6 +44,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       (widget.resumeDraft == null || !widget.resumeDraft!.isEditingExisting);
   bool _isInitialized = false;
   bool _isPickingImage = false;
+  bool _isPickingVideo = false;
 
   // Last text pushed to the provider. TextEditingController notifies on
   // selection-only changes too - those must not rebuild or autosave.
@@ -260,7 +268,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   bool _isPublishing = false;
 
-  Future<void> _handleSave() async {
+  /// Publish the post. For NEW posts, [asDraft] saves to the remote
+  /// Jekyll drafts dir instead (Publish button's overflow menu).
+  Future<void> _handleSave({bool asDraft = false}) async {
     // Cancel pending auto-save so it can't race the publish
     _autoSaveTimer?.cancel();
 
@@ -284,93 +294,169 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     HapticFeedback.mediumImpact();
 
     try {
+      // Media referenced in the body must be settled (or explicitly
+      // overridden) before the post goes live
+      if (!await _ensureMediaUploaded(bodyContent)) return;
+      if (!mounted) return;
+
+      // Don't fire a doomed request when the device is clearly offline -
+      // offer the queue up front
+      if (await _isDefinitelyOffline()) {
+        if (mounted) await _handleOfflinePublish(asDraft: asDraft);
+        return;
+      }
+      if (!mounted) return;
+
       final publishNotifier = ref.read(publishNotifierProvider.notifier);
       final editorState = ref.read(editorControllerProvider);
-      bool success;
+      // A conflict 'Keep both' reload swaps the session onto the fresh
+      // remote post, so prefer the editor's originalPost over widget.post
+      final originalPost = editorState.originalPost ?? widget.post;
 
-      if (isNewPost) {
-        // Create new post - the Post settings sheet values drive the
-        // front matter ('' / empty list = omit the key)
-        success = await publishNotifier.publishNewPost(
-          title: title,
-          bodyContent: bodyContent,
-          publishDate: editorState.publishDate,
-          layout: editorState.layout,
-          categories: editorState.categories,
-          tags: editorState.tags,
-        );
-      } else {
-        // Update existing post. Untouched settings pass null so the
-        // original front matter is preserved byte-exact; edited settings
-        // are merged with unmodeled fields passing through verbatim.
-        final settingsEdited = editorState.frontmatterEdited;
-        success = await publishNotifier.publishUpdate(
-          originalPost: widget.post!,
-          newBodyContent: bodyContent,
-          publishDate: editorState.publishDate,
-          layout: settingsEdited ? editorState.layout : null,
-          categories: settingsEdited ? editorState.categories : null,
-          tags: settingsEdited ? editorState.tags : null,
-        );
-      }
-
-      if (success && mounted) {
-        // Clear editor state and delete draft
-        ref.read(editorControllerProvider.notifier).clear();
-        await ref.read(currentDraftNotifierProvider.notifier).clearAfterPublish();
+      // Loop so the conflict dialog's 'Overwrite' can re-run the publish
+      // with the force flag set
+      var force = false;
+      while (true) {
+        bool success;
+        if (isNewPost) {
+          // Create new post - the Post settings sheet values drive the
+          // front matter ('' / empty list = omit the key)
+          success = await publishNotifier.publishNewPost(
+            title: title,
+            bodyContent: bodyContent,
+            asDraft: asDraft,
+            publishDate: editorState.publishDate,
+            layout: editorState.layout,
+            categories: editorState.categories,
+            tags: editorState.tags,
+          );
+        } else {
+          // Update existing post. Untouched settings pass null so the
+          // original front matter is preserved byte-exact; edited settings
+          // are merged with unmodeled fields passing through verbatim.
+          final settingsEdited = editorState.frontmatterEdited;
+          success = await publishNotifier.publishUpdate(
+            originalPost: originalPost!,
+            newBodyContent: bodyContent,
+            publishDate: editorState.publishDate,
+            layout: settingsEdited ? editorState.layout : null,
+            categories: settingsEdited ? editorState.categories : null,
+            tags: settingsEdited ? editorState.tags : null,
+            force: force,
+          );
+        }
         if (!mounted) return;
 
-        // Refresh posts list and drafts
-        ref.read(postsNotifierProvider.notifier).refresh();
-        ref.read(draftsNotifierProvider.notifier).refresh();
+        if (success) {
+          // This publish supersedes any queued copy of the same draft
+          // (the user may have reopened a queued post's safety draft from
+          // the Drafts tab) - drop it so the queue can't publish a
+          // duplicate when connectivity returns
+          final publishedDraftId = ref
+              .read(currentDraftNotifierProvider.notifier)
+              .currentDraft
+              ?.id;
+          if (publishedDraftId != null) {
+            await ref
+                .read(publishQueueNotifierProvider.notifier)
+                .removeItemsForDraft(publishedDraftId);
+          }
+          if (!mounted) return;
 
-        // Show success message
-        final publishState = ref.read(publishNotifierProvider);
-        String message = 'Post published successfully!';
-        if (publishState is PublishSucceeded) {
-          message = isNewPost
-              ? 'Post created: ${publishState.filename}'
-              : 'Post updated successfully!';
-        }
+          // Clear editor state and delete draft
+          ref.read(editorControllerProvider.notifier).clear();
+          await ref
+              .read(currentDraftNotifierProvider.notifier)
+              .clearAfterPublish();
+          if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF81C784), size: 20),
-                const SizedBox(width: 12),
-                Expanded(child: Text(message)),
-              ],
+          // Refresh posts list and drafts
+          ref.read(postsNotifierProvider.notifier).refresh();
+          ref.read(draftsNotifierProvider.notifier).refresh();
+
+          // Show success message, with a View action when the post has a
+          // public URL on the configured site
+          final publishState = ref.read(publishNotifierProvider);
+          String message = 'Post published successfully!';
+          String? viewUrl;
+          if (publishState is PublishSucceeded) {
+            viewUrl = publishState.publicUrl;
+            message = asDraft
+                ? 'Draft saved to GitHub: ${publishState.filename}'
+                : isNewPost
+                    ? 'Post created: ${publishState.filename}'
+                    : 'Post updated successfully!';
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF81C784), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: const Color(0xFF1A2F23),
+              duration: viewUrl != null
+                  ? const Duration(seconds: 6)
+                  : const Duration(seconds: 4),
+              action: viewUrl != null
+                  ? SnackBarAction(
+                      label: 'View',
+                      textColor: const Color(0xFFE8A87C),
+                      onPressed: () => _launchExternal(viewUrl!),
+                    )
+                  : null,
             ),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF1A2F23),
-          ),
-        );
+          );
 
-        // Reset publish state and navigate back
-        publishNotifier.reset();
-        Navigator.of(context).pop();
-      } else if (mounted) {
-        // Show error
-        final publishState = ref.read(publishNotifierProvider);
-        String error = 'Failed to publish';
-        if (publishState is PublishFailed) {
-          error = publishState.error;
+          // Reset publish state and navigate back
+          publishNotifier.reset();
+          Navigator.of(context).pop();
+          return;
         }
 
+        // Failure: typed recovery flows first, generic snackbar otherwise
+        final publishState = ref.read(publishNotifierProvider);
+        final failure = publishState is PublishFailed ? publishState : null;
+
+        if (failure != null &&
+            failure.kind == PublishErrorKind.conflict &&
+            !isNewPost) {
+          final choice = await _showConflictDialog();
+          if (!mounted) return;
+          if (choice == _ConflictChoice.overwrite) {
+            force = true;
+            continue;
+          }
+          if (choice == _ConflictChoice.keepBoth) {
+            await _keepBothVersions(originalPost!);
+          }
+          return; // Cancel / dismissed
+        }
+
+        if (failure != null && failure.kind == PublishErrorKind.offline) {
+          await _handleOfflinePublish(asDraft: asDraft);
+          return;
+        }
+
+        // Show error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
                 const Icon(Icons.error_outline_rounded, color: Color(0xFFE57373), size: 20),
                 const SizedBox(width: 12),
-                Expanded(child: Text(error)),
+                Expanded(child: Text(failure?.error ?? 'Failed to publish')),
               ],
             ),
             behavior: SnackBarBehavior.floating,
             backgroundColor: const Color(0xFF1A2F23),
           ),
         );
+        return;
       }
     } finally {
       if (mounted) {
@@ -379,14 +465,547 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  /// Open [url] in the external browser (best-effort, no context needed
+  /// after pop - errors are silently ignored)
+  void _launchExternal(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    launchUrl(uri, mode: LaunchMode.externalApplication)
+        .catchError((_) => false);
+  }
+
+  /// True only when connectivity_plus is POSITIVE there is no network.
+  /// Any uncertainty returns false and lets the request itself decide.
+  Future<bool> _isDefinitelyOffline() async {
+    try {
+      final results =
+          await ref.read(connectivityProvider).checkConnectivity();
+      return results.isNotEmpty &&
+          results.every((r) => r == ConnectivityResult.none);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Offline publish flow: offer to queue the post so it publishes
+  /// automatically when the connection returns
+  Future<void> _handleOfflinePublish({required bool asDraft}) async {
+    final choice = await _showOfflineDialog();
+    if (!mounted) return;
+
+    switch (choice) {
+      case _OfflineChoice.queue:
+        await _queuePublish(asDraft: asDraft);
+      case _OfflineChoice.discard:
+        // Explicitly chosen over queueing and keep-editing: the draft
+        // goes too
+        await ref.read(currentDraftNotifierProvider.notifier).discardDraft();
+        if (!mounted) return;
+        ref.read(editorControllerProvider.notifier).clear();
+        Navigator.of(context).pop();
+      default:
+        return; // Keep editing / dismissed
+    }
+  }
+
+  /// Queue the publish and close the editor like a successful publish.
+  /// The local draft is KEPT as a safety net; its id rides on the queue
+  /// item so both are cleaned up when the queued publish succeeds.
+  Future<void> _queuePublish({required bool asDraft}) async {
+    // Make sure the safety-net draft holds the latest content
+    await _saveImmediately();
+    if (!mounted) return;
+
+    final editorState = ref.read(editorControllerProvider);
+    final originalPost = editorState.originalPost ?? widget.post;
+    final settingsEdited = editorState.frontmatterEdited;
+    final draftId =
+        ref.read(currentDraftNotifierProvider.notifier).currentDraft?.id;
+
+    // Capture exactly what _handleSave would have passed to the publish
+    // notifier (creates always send the sheet values, updates only send
+    // edited ones so untouched front matter stays byte-exact)
+    final item = QueuedPublish(
+      id: 'queued_${DateTime.now().millisecondsSinceEpoch}',
+      type: isNewPost ? QueuedPublish.typeCreate : QueuedPublish.typeUpdate,
+      title: _titleController.text,
+      bodyContent: _bodyController.text,
+      asDraft: asDraft,
+      createdAt: DateTime.now(),
+      publishDate: editorState.publishDate,
+      layout: isNewPost
+          ? editorState.layout
+          : (settingsEdited ? editorState.layout : null),
+      categories: isNewPost
+          ? editorState.categories
+          : (settingsEdited ? editorState.categories : null),
+      tags: isNewPost
+          ? editorState.tags
+          : (settingsEdited ? editorState.tags : null),
+      originalPath: originalPost?.filePath,
+      originalSha: originalPost?.sha,
+      originalFileName: originalPost?.fileName,
+      originalDate: originalPost?.date,
+      originalFrontmatter: originalPost?.rawFrontmatter,
+      safetyDraftId: draftId,
+    );
+    final queueNotifier = ref.read(publishQueueNotifierProvider.notifier);
+    // Re-queuing the same draft REPLACES its previous queue entry -
+    // otherwise reopening a queued draft and queueing again would
+    // publish the post twice when connectivity returns
+    if (draftId != null) {
+      await queueNotifier.removeItemsForDraft(draftId);
+    }
+    await queueNotifier.enqueue(item);
+    if (!mounted) return;
+
+    // Close like a successful publish, but KEEP the local draft
+    ref.read(editorControllerProvider.notifier).clear();
+    ref.read(currentDraftNotifierProvider.notifier).clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.schedule_send_rounded,
+                color: Color(0xFFE8A87C), size: 20),
+            SizedBox(width: 12),
+            Expanded(child: Text('Queued - will publish when back online')),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Color(0xFF1A2F23),
+      ),
+    );
+    Navigator.of(context).pop();
+  }
+
+  Future<_OfflineChoice?> _showOfflineDialog() {
+    return showDialog<_OfflineChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('You appear to be offline'),
+        content: const Text(
+          'GitHub cannot be reached right now. This post can be queued '
+          'and published automatically when the connection returns.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, _OfflineChoice.keepEditing),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _OfflineChoice.discard),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Discard'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _OfflineChoice.queue),
+            child: const Text('Queue and publish when online'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<_ConflictChoice?> _showConflictDialog() {
+    return showDialog<_ConflictChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Post changed on GitHub'),
+        content: const Text(
+          'This post was changed on GitHub after you opened it. '
+          'Overwrite it with your version, or keep both to review?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _ConflictChoice.keepBoth),
+            child: const Text('Keep both'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _ConflictChoice.overwrite),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Overwrite with my version'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Conflict 'Keep both': the current editor content is saved as its
+  /// own local draft, then the remote version is loaded into the editor
+  /// so nothing is lost on either side.
+  Future<void> _keepBothVersions(BlogPost originalPost) async {
+    _autoSaveTimer?.cancel();
+
+    // 1. My version becomes a standalone local draft
+    final myDraft = LocalDraft.newDraft(
+      id: 'draft_${DateTime.now().millisecondsSinceEpoch}',
+      title: _titleController.text,
+      bodyContent: _bodyController.text,
+    );
+    await ref.read(draftsNotifierProvider.notifier).saveDraft(myDraft);
+    if (!mounted) return;
+
+    const savedNote = 'Your version was saved to drafts';
+
+    // 2. Fetch the remote version (content + current sha)
+    final configState = ref.read(configNotifierProvider);
+    final config = configState is ConfigLoaded ? configState.config : null;
+    final path = originalPost.filePath ??
+        (originalPost.fileName != null && config != null
+            ? '${ContentService.cleanDir(config.postsPath)}/${originalPost.fileName}'
+            : null);
+    if (config == null || path == null) {
+      _showMediaGateSnack(
+          '$savedNote, but the GitHub version could not be located');
+      return;
+    }
+
+    BlogPost fresh;
+    try {
+      final content = await ref
+          .read(contentServiceProvider)
+          .fetchFileContent(config, path);
+      final sha = await ref
+          .read(githubUploadServiceProvider)
+          .fetchCurrentSha(config: config, path: path);
+      final parsed = FrontmatterParser.parse(content);
+      fresh = originalPost.copyWith(
+        sha: sha,
+        title: parsed.title,
+        date: parsed.date,
+        rawFrontmatter: parsed.rawFrontmatter,
+        bodyContent: parsed.bodyContent,
+      );
+    } catch (e) {
+      if (mounted) {
+        _showMediaGateSnack(
+            '$savedNote, but the GitHub version could not be loaded: $e');
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    // 3. Update the cache and swap this editing session onto the remote
+    // version. The edit-draft held my version, which now lives in
+    // [myDraft] - drop it so it doesn't resurface as diverging edits.
+    await ref.read(postsNotifierProvider.notifier).updatePost(fresh);
+    await ref.read(currentDraftNotifierProvider.notifier).clearAfterPublish();
+    if (!mounted) return;
+
+    _titleController.text = fresh.title;
+    _bodyController.text = fresh.bodyContent;
+    ref.read(editorControllerProvider.notifier).initializeWithPost(fresh);
+    ref
+        .read(currentDraftNotifierProvider.notifier)
+        .initializeForExistingPost(fresh);
+    // Setting the controllers fired the change listeners, which armed the
+    // autosave debounce - the fresh content IS the baseline, so an
+    // autosave now would only persist a no-op edit draft
+    _autoSaveTimer?.cancel();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('$savedNote - now showing the GitHub version'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Color(0xFF1A2F23),
+      ),
+    );
+  }
+
+  /// Gate publishing on media uploads: media filenames referenced in
+  /// [bodyContent] that are still uploading or have failed get a dialog
+  /// (wait / retry / publish anyway / cancel). Returns true to proceed.
+  Future<bool> _ensureMediaUploaded(String bodyContent) async {
+    while (true) {
+      final statuses = ref.read(imageManagerProvider);
+      final inBody = statuses.entries
+          .where((entry) => bodyContent.contains(entry.key))
+          .toList();
+      final pending = [
+        for (final entry in inBody)
+          if (!entry.value.isUploaded && entry.value.error == null) entry.key,
+      ];
+      final failed = [
+        for (final entry in inBody)
+          if (entry.value.error != null) entry.key,
+      ];
+
+      if (pending.isEmpty && failed.isEmpty) return true;
+      if (!mounted) return false;
+
+      if (pending.isNotEmpty) {
+        final choice = await _showPendingUploadsDialog(pending.length);
+        switch (choice) {
+          case _MediaGateChoice.publishAnyway:
+            return true;
+          case _MediaGateChoice.wait:
+            if (!await _waitForUploads(pending)) {
+              _showMediaGateSnack(
+                  'Uploads are taking too long - try publishing again in a moment');
+              return false;
+            }
+            continue; // Re-check: a waited upload may have failed
+          default:
+            return false; // Cancel / dismissed
+        }
+      }
+
+      // Only failures left
+      final choice = await _showFailedUploadsDialog(failed);
+      switch (choice) {
+        case _MediaGateChoice.publishAnyway:
+          return true;
+        case _MediaGateChoice.retry:
+          final imageManager = ref.read(imageManagerProvider.notifier);
+          final retries = [
+            for (final filename in failed) imageManager.retryUpload(filename),
+          ];
+          if (!await _showUploadWaitDialog(Future.wait(retries))) {
+            _showMediaGateSnack(
+                'Uploads are taking too long - try publishing again in a moment');
+            return false;
+          }
+          continue; // Re-check: retries may have failed again
+        default:
+          return false; // Cancel / dismissed
+      }
+    }
+  }
+
+  /// Wait (up to 60s, behind a blocking dialog) until every filename in
+  /// [filenames] is settled: uploaded or failed. True when all settled.
+  Future<bool> _waitForUploads(List<String> filenames) {
+    bool settled(Map<String, ImageUploadStatus> statuses) =>
+        filenames.every((filename) {
+          final status = statuses[filename];
+          return status == null || status.isUploaded || status.error != null;
+        });
+
+    if (settled(ref.read(imageManagerProvider))) {
+      return Future.value(true);
+    }
+
+    final completer = Completer<void>();
+    final subscription = ref.listenManual(imageManagerProvider, (_, next) {
+      if (!completer.isCompleted && settled(next)) {
+        completer.complete();
+      }
+    });
+
+    return _showUploadWaitDialog(completer.future)
+        .whenComplete(subscription.close);
+  }
+
+  /// Show a blocking progress dialog until [operation] completes or 60s
+  /// elapse. Returns true when it completed in time.
+  Future<bool> _showUploadWaitDialog(Future<void> operation) async {
+    BuildContext? dialogContext;
+    // Not awaited - dismissed programmatically below
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        dialogContext = context;
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A2F23),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: const Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFE8A87C),
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(child: Text('Waiting for uploads...')),
+            ],
+          ),
+        );
+      },
+    );
+
+    var completed = true;
+    try {
+      await operation.timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      completed = false;
+    } catch (_) {
+      // Upload failures surface through the status map, not here
+    }
+
+    // The operation can settle before the dialog's first frame - give
+    // the route a beat to build so it can be dismissed
+    if (dialogContext == null) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    if (dialogContext != null && dialogContext!.mounted) {
+      Navigator.of(dialogContext!).pop();
+    }
+    return completed;
+  }
+
+  Future<_MediaGateChoice?> _showPendingUploadsDialog(int count) {
+    return showDialog<_MediaGateChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Media still uploading'),
+        content: Text(
+          count == 1
+              ? '1 file in this post is still uploading. Wait for it to finish?'
+              : '$count files in this post are still uploading. '
+                  'Wait for them to finish?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, _MediaGateChoice.publishAnyway),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Publish anyway'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _MediaGateChoice.wait),
+            child: const Text('Wait'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<_MediaGateChoice?> _showFailedUploadsDialog(List<String> failed) {
+    return showDialog<_MediaGateChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Media uploads failed'),
+        content: Text(
+          'These files failed to upload:\n\n'
+          '${failed.map((filename) => '• $filename').join('\n')}\n\n'
+          'Publishing now would leave broken media in the post.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, _MediaGateChoice.publishAnyway),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Publish anyway'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _MediaGateChoice.retry),
+            child: const Text('Retry uploads'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMediaGateSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Let the user choose where the image comes from.
+  /// Returns true for camera, false for gallery, null when dismissed.
+  Future<bool?> _showImageSourceSheet() {
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF1A2F23),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_rounded,
+                color: Color(0xFFE8A87C),
+              ),
+              title: const Text(
+                'Gallery',
+                style: TextStyle(color: Color(0xFFF5F5F0)),
+              ),
+              onTap: () => Navigator.pop(context, false),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_camera_rounded,
+                color: Color(0xFFE8A87C),
+              ),
+              title: const Text(
+                'Camera',
+                style: TextStyle(color: Color(0xFFF5F5F0)),
+              ),
+              onTap: () => Navigator.pop(context, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleAddImage() async {
     if (_isPickingImage) return;
+
+    // Gallery or camera (video stays gallery-only)
+    final fromCamera = await _showImageSourceSheet();
+    if (fromCamera == null || !mounted) return;
 
     setState(() => _isPickingImage = true);
 
     try {
       final imageManager = ref.read(imageManagerProvider.notifier);
-      final filename = await imageManager.pickImage();
+      final filename = await imageManager.pickImage(fromCamera: fromCamera);
 
       if (filename != null && mounted) {
         // Generate markdown and insert at cursor. If the body was never
@@ -439,6 +1058,103 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     } finally {
       if (mounted) {
         setState(() => _isPickingImage = false);
+      }
+    }
+  }
+
+  Future<void> _handleAddVideo() async {
+    if (_isPickingVideo) return;
+
+    setState(() => _isPickingVideo = true);
+
+    try {
+      final imageManager = ref.read(imageManagerProvider.notifier);
+      final filename = await imageManager.pickVideo(
+        onCompressionStart: () {
+          // Compression can take a while - keep the user informed while
+          // the toolbar button shows its spinner
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFE8A87C),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('Compressing video...'),
+                ],
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(minutes: 2),
+            ),
+          );
+        },
+      );
+
+      if (mounted) {
+        // Replace the long-lived compressing snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+
+      if (filename != null && mounted) {
+        // Insert the raw-HTML embed at the cursor (same no-cursor
+        // fallback as images: append at the end and scroll there)
+        final embed = imageManager.generateVideoEmbed(filename);
+        final hadCursor = _bodyController.selection.isValid;
+        _insertTextAtCursor('\n$embed\n');
+        if (!hadCursor) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _bodyScrollController.hasClients) {
+              _bodyScrollController.jumpTo(
+                _bodyScrollController.position.maxScrollExtent,
+              );
+            }
+          });
+        }
+
+        HapticFeedback.mediumImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFFE8A87C),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text('Uploading video...'),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            // Size-limit / compression errors carry their own message
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFE57373),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingVideo = false);
       }
     }
   }
@@ -570,6 +1286,36 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     ],
                   ),
           ),
+          // Alternative publish targets for NEW posts (kept adjacent to,
+          // not inside, the Publish button)
+          if (isNewPost)
+            PopupMenuButton<String>(
+              enabled: !_isPublishing,
+              tooltip: 'More publish options',
+              icon: const Icon(
+                Icons.arrow_drop_down_rounded,
+                color: Color(0xFFA8B5A0),
+              ),
+              color: const Color(0xFF1A2F23),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onSelected: (value) {
+                if (value == 'draft') _handleSave(asDraft: true);
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'draft',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_upload_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Save as draft on GitHub'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -905,6 +1651,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             isLoading: _isPickingImage,
           ),
           const SizedBox(width: 6),
+          // Add Video button
+          _ToolbarButton(
+            icon: Icons.videocam_rounded,
+            tooltip: 'Add video',
+            onPressed: _isPickingVideo ? null : _handleAddVideo,
+            isLoading: _isPickingVideo,
+          ),
+          const SizedBox(width: 6),
           // Markdown help button
           _ToolbarButton(
             icon: Icons.help_outline_rounded,
@@ -995,7 +1749,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
                 ),
                 child: MarkdownBody(
-                  data: editorState.bodyContent,
+                  // Raw <video> HTML blocks become placeholder "images"
+                  // routed to _buildVideoPlaceholder via the builder below
+                  data: preprocessPreviewMarkdown(editorState.bodyContent),
                   selectable: true,
                   styleSheet: _buildMarkdownStyleSheet(),
                   sizedImageBuilder: (config) => _buildImage(config.uri, config.title, config.alt),
@@ -1008,10 +1764,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
   }
 
-  /// Smart image resolver - checks local cache first, falls back to GitHub
+  /// Smart image resolver - checks local cache first, falls back to GitHub.
+  /// Video placeholders injected by [preprocessPreviewMarkdown] render as
+  /// a card instead (the preview never plays video).
   Widget _buildImage(Uri uri, String? title, String? alt) {
     final path = uri.toString();
     final filename = path.split('/').last;
+
+    if (uri.scheme == videoPreviewScheme) {
+      return _buildVideoPlaceholder(filename);
+    }
 
     return Consumer(
       builder: (context, ref, _) {
@@ -1045,88 +1807,165 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               ),
               // Upload status overlay
               if (uploadStatus != null && uploadStatus.isUploading)
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFFE8A87C),
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Uploading...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                Positioned.fill(child: _buildUploadingOverlay()),
               // Upload error overlay
               if (uploadStatus != null && uploadStatus.error != null)
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE57373),
-                      borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Upload failed',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => imageManager.retryUpload(filename),
-                          child: const Text(
-                            'Retry',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: _buildUploadErrorOverlay(filename, imageManager),
                 ),
             ],
           ),
         );
       },
+    );
+  }
+
+  /// Rounded card standing in for a raw-HTML <video> embed: play badge,
+  /// filename, and the same upload overlays as images
+  Widget _buildVideoPlaceholder(String filename) {
+    final label = filename.isEmpty ? 'video' : filename;
+
+    return Consumer(
+      builder: (context, ref, _) {
+        final imageManager = ref.read(imageManagerProvider.notifier);
+
+        // Watch upload state so overlays update as uploads progress
+        final uploadStatus = ref.watch(imageManagerProvider)[filename];
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Stack(
+            children: [
+              Container(
+                height: 180,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1B14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF2D4A3E).withAlpha(100),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2D4A3E).withAlpha(120),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        size: 32,
+                        color: Color(0xFFE8A87C),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: Color(0xFFA8B5A0),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (uploadStatus != null && uploadStatus.isUploading)
+                Positioned.fill(child: _buildUploadingOverlay()),
+              if (uploadStatus != null && uploadStatus.error != null)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildUploadErrorOverlay(filename, imageManager),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Dimmed 'Uploading...' overlay shared by image and video previews
+  Widget _buildUploadingOverlay() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFFE8A87C),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Uploading...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bottom 'Upload failed / Retry' bar shared by image and video previews
+  Widget _buildUploadErrorOverlay(String filename, ImageManager imageManager) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Color(0xFFE57373),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(12),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Upload failed',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => imageManager.retryUpload(filename),
+            child: const Text(
+              'Retry',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1828,6 +2667,15 @@ class _ChipEditorState extends State<_ChipEditor> {
     );
   }
 }
+
+/// Outcome of the pre-publish media gate dialogs (cancel = null)
+enum _MediaGateChoice { wait, retry, publishAnyway }
+
+/// Outcome of the publish-conflict dialog (cancel = null)
+enum _ConflictChoice { overwrite, keepBoth }
+
+/// Outcome of the offline-publish dialog (dismissed = keep editing)
+enum _OfflineChoice { queue, discard, keepEditing }
 
 /// Toolbar button widget
 class _ToolbarButton extends StatelessWidget {

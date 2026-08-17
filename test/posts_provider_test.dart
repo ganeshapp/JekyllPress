@@ -43,13 +43,21 @@ class FakeContentService extends ContentService {
   }
 }
 
-BlogPost _post(String fileName, String date, {DateTime? lastSynced}) {
+BlogPost _post(
+  String fileName,
+  String date, {
+  DateTime? lastSynced,
+  String? filePath,
+  String title = '',
+  String body = 'body',
+}) {
   return BlogPost(
     sha: 'sha_$fileName',
     fileName: fileName,
-    title: fileName,
+    filePath: filePath,
+    title: title.isEmpty ? fileName : title,
     date: date,
-    bodyContent: 'body',
+    bodyContent: body,
     lastSynced: lastSynced,
   );
 }
@@ -248,6 +256,120 @@ void main() {
       final state = container.read(postsNotifierProvider);
       expect(state, isA<PostsError>());
       expect((state as PostsError).message, 'No repository configured');
+    });
+  });
+
+  group('isRemoteDraft', () {
+    final config = AppConfig(repoOwner: 'gapp', repoName: 'blog');
+
+    test('derived from filePath under draftsPath - nothing stored', () {
+      expect(
+        isRemoteDraft(
+            _post('idea.md', '2026-08-01', filePath: '_drafts/idea.md'),
+            config),
+        isTrue,
+      );
+      expect(
+        isRemoteDraft(
+            _post('a.md', '2026-08-01', filePath: '_posts/a.md'), config),
+        isFalse,
+      );
+      // Prefix that is not the dir
+      expect(
+        isRemoteDraft(
+            _post('t.md', '2026-08-01', filePath: '_draftsx/t.md'), config),
+        isFalse,
+      );
+    });
+
+    test('local drafts and pathless v1 records are never remote drafts', () {
+      final local = BlogPost(
+        title: 'local',
+        date: '2026-08-01',
+        bodyContent: 'b',
+        isLocalDraft: true,
+      );
+      expect(isRemoteDraft(local, config), isFalse);
+      expect(
+        isRemoteDraft(_post('a.md', '2026-08-01'), config),
+        isFalse,
+      );
+    });
+
+    test('respects a configured drafts dir', () {
+      final custom = AppConfig(
+        repoOwner: 'gapp',
+        repoName: 'blog',
+        draftsPath: 'docs/_drafts',
+      );
+      expect(
+        isRemoteDraft(
+            _post('i.md', '2026-08-01', filePath: 'docs/_drafts/i.md'),
+            custom),
+        isTrue,
+      );
+      expect(
+        isRemoteDraft(
+            _post('i.md', '2026-08-01', filePath: '_drafts/i.md'), custom),
+        isFalse,
+      );
+    });
+  });
+
+  group('filterPostsByQuery', () {
+    final posts = [
+      _post('a.md', '2026-08-01', title: 'Flutter Tips', body: 'hot reload'),
+      _post('b.md', '2026-08-02', title: 'Jekyll Notes', body: 'liquid tags'),
+    ];
+
+    test('matches title and body, case-insensitively', () {
+      expect(filterPostsByQuery(posts, 'flutter').single.fileName, 'a.md');
+      expect(filterPostsByQuery(posts, 'LIQUID').single.fileName, 'b.md');
+    });
+
+    test('empty or whitespace query keeps everything', () {
+      expect(filterPostsByQuery(posts, ''), hasLength(2));
+      expect(filterPostsByQuery(posts, '   '), hasLength(2));
+    });
+
+    test('no match yields an empty list', () {
+      expect(filterPostsByQuery(posts, 'rust'), isEmpty);
+    });
+  });
+
+  group('PostsNotifier.removePost', () {
+    test('drops the post from the cache box and the state', () async {
+      await postsBox.put(
+        '_posts/2026-07-01-a.md',
+        _post('2026-07-01-a.md', '2026-07-01',
+            filePath: '_posts/2026-07-01-a.md'),
+      );
+      await postsBox.put(
+        '_posts/2026-07-02-b.md',
+        _post('2026-07-02-b.md', '2026-07-02',
+            filePath: '_posts/2026-07-02-b.md'),
+      );
+      fakeService.onSync = () => [
+            _post('2026-07-01-a.md', '2026-07-01',
+                filePath: '_posts/2026-07-01-a.md'),
+            _post('2026-07-02-b.md', '2026-07-02',
+                filePath: '_posts/2026-07-02-b.md'),
+          ];
+
+      readPosts();
+      await _settle();
+
+      await container.read(postsNotifierProvider.notifier).removePost(
+            _post('2026-07-01-a.md', '2026-07-01',
+                filePath: '_posts/2026-07-01-a.md'),
+          );
+
+      expect(postsBox.containsKey('_posts/2026-07-01-a.md'), isFalse);
+      expect(postsBox.containsKey('_posts/2026-07-02-b.md'), isTrue);
+      final state = container.read(postsNotifierProvider);
+      expect(state, isA<PostsLoaded>());
+      expect((state as PostsLoaded).posts.map((p) => p.fileName),
+          ['2026-07-02-b.md']);
     });
   });
 

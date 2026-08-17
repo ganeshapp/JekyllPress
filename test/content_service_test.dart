@@ -8,12 +8,17 @@ import 'package:jekyllpress/core/services/content_service.dart';
 
 import 'fakes.dart';
 
-AppConfig _config({String branch = 'main', String? activeContentDir}) {
+AppConfig _config({
+  String branch = 'main',
+  String? activeContentDir,
+  String? draftsPath,
+}) {
   return AppConfig(
     repoOwner: 'gapp',
     repoName: 'blog',
     branch: branch,
     activeContentDir: activeContentDir,
+    draftsPath: draftsPath,
   );
 }
 
@@ -43,6 +48,26 @@ void main() {
       expect(ContentService.cleanDir('/_posts/'), '_posts');
       expect(ContentService.cleanDir('docs/_posts'), 'docs/_posts');
       expect(ContentService.cleanDir('//_wiki//'), '_wiki');
+    });
+  });
+
+  group('ContentService.contentDirsToSync', () {
+    test('active content dir plus the drafts dir', () {
+      expect(ContentService.contentDirsToSync(_config()),
+          ['_posts', '_drafts']);
+      expect(
+        ContentService.contentDirsToSync(
+            _config(activeContentDir: '_wiki', draftsPath: 'docs/_drafts')),
+        ['_wiki', 'docs/_drafts'],
+      );
+    });
+
+    test('drafts dir equal to the active dir is not duplicated', () {
+      expect(
+        ContentService.contentDirsToSync(
+            _config(activeContentDir: '_drafts')),
+        ['_drafts'],
+      );
     });
   });
 
@@ -109,6 +134,62 @@ void main() {
           .fetchPostsList(_config(activeContentDir: '_wiki'));
 
       expect(files.map((f) => f.path), ['_wiki/a.md']);
+    });
+
+    test('remote Jekyll drafts under draftsPath ride along in the same '
+        'listing', () async {
+      final requests = <RequestOptions>[];
+      final dio = dioWithResponse((options) {
+        requests.add(options);
+        return jsonResponse(
+          _treesJson(tree: [
+            _blob('_posts/a.md', 's1'),
+            _blob('_drafts/idea.md', 's2'),
+            _blob('_draftsx/trick.md', 's3'), // prefix but not the dir
+          ]),
+          200,
+        );
+      });
+      final service = ContentService(dio: dio);
+
+      final files = await service.fetchPostsList(_config());
+
+      // One git-trees call covers both dirs
+      expect(requests, hasLength(1));
+      expect(files.map((f) => f.path),
+          ['_posts/a.md', '_drafts/idea.md']);
+    });
+
+    test('truncated-tree fallback walks the drafts dir too', () async {
+      final dio = dioWithResponse((options) {
+        if (options.path.contains('/git/trees/')) {
+          return jsonResponse(_treesJson(tree: [], truncated: true), 200);
+        }
+        if (options.path == '/repos/gapp/blog/contents/_posts') {
+          return jsonResponse(
+            jsonEncode([
+              {'name': 'a.md', 'path': '_posts/a.md', 'sha': 's1', 'type': 'file'},
+            ]),
+            200,
+          );
+        }
+        if (options.path == '/repos/gapp/blog/contents/_drafts') {
+          return jsonResponse(
+            jsonEncode([
+              {'name': 'idea.md', 'path': '_drafts/idea.md', 'sha': 's2', 'type': 'file'},
+            ]),
+            200,
+          );
+        }
+        return jsonResponse('{"message":"Not Found"}', 404);
+      });
+      final service = ContentService(dio: dio);
+
+      final files = await service.fetchPostsList(_config());
+
+      expect(files.map((f) => f.path),
+          containsAll(['_posts/a.md', '_drafts/idea.md']));
+      expect(files, hasLength(2));
     });
 
     test('truncated tree falls back to per-directory contents listing '

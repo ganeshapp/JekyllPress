@@ -53,6 +53,7 @@ void main() {
       expect(config.defaultTags, isEmpty);
       expect(config.contentDirs, ['_posts']);
       expect(config.activeContentDir, '_posts');
+      expect(config.permalinkPattern, '');
     });
 
     test('empty strings and empty lists are treated as unset', () {
@@ -122,6 +123,7 @@ void main() {
         defaultTags: ['t'],
         contentDirs: ['docs/_posts', '_wiki'],
         activeContentDir: '_wiki',
+        permalinkPattern: '/blog/:title/',
       );
 
       expect(config.repoOwner, 'o');
@@ -137,6 +139,7 @@ void main() {
       expect(config.defaultTags, ['t']);
       expect(config.contentDirs, ['docs/_posts', '_wiki']);
       expect(config.activeContentDir, '_wiki');
+      expect(config.permalinkPattern, '/blog/:title/');
     });
 
     test('keeps existing values (and null raws stay null)', () {
@@ -204,6 +207,7 @@ void main() {
       expect(config.defaultTags, isEmpty);
       expect(config.contentDirs, ['_posts']);
       expect(config.activeContentDir, '_posts');
+      expect(config.permalinkPattern, '');
     });
 
     test('v2 round-trips all fields', () async {
@@ -225,6 +229,7 @@ void main() {
           defaultTags: ['dev', 'notes'],
           contentDirs: ['docs/_posts', '_wiki'],
           activeContentDir: '_wiki',
+          permalinkPattern: '/blog/:title/',
         ),
       );
 
@@ -238,6 +243,7 @@ void main() {
       expect(config.defaultTags, ['dev', 'notes']);
       expect(config.contentDirs, ['docs/_posts', '_wiki']);
       expect(config.activeContentDir, '_wiki');
+      expect(config.permalinkPattern, '/blog/:title/');
     });
   });
 }

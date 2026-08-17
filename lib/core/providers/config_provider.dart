@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -109,6 +111,10 @@ class ConfigNotifier extends _$ConfigNotifier {
   /// public site URL (and, unless explicitly provided, the baseurl) is
   /// inferred from the GitHub Pages naming convention via
   /// [inferPagesSite].
+  ///
+  /// The site's permalink pattern is discovered from _config.yml
+  /// best-effort in the background (never blocking or failing the save);
+  /// an existing pattern is kept while the repo/branch is unchanged.
   Future<void> saveConfig({
     required String repoOwner,
     required String repoName,
@@ -124,6 +130,14 @@ class ConfigNotifier extends _$ConfigNotifier {
     List<String>? contentDirs,
     String? activeContentDir,
   }) async {
+    // Keep a previously discovered permalink pattern only while the
+    // repo/branch stays the same - it belongs to that _config.yml
+    final previous = currentConfig;
+    final samePlace = previous != null &&
+        previous.repoOwner == repoOwner &&
+        previous.repoName == repoName &&
+        previous.branch == branch;
+
     state = const ConfigLoading();
 
     var effectiveSiteUrl = siteUrl;
@@ -152,10 +166,49 @@ class ConfigNotifier extends _$ConfigNotifier {
       defaultTags: defaultTags,
       contentDirs: contentDirs,
       activeContentDir: activeContentDir,
+      permalinkPattern: samePlace ? previous.permalinkPatternRaw : null,
     );
 
     await box.put(_configKey, config);
     state = ConfigLoaded(config);
+
+    // Best-effort, off the save's critical path
+    unawaited(refreshPermalinkPattern());
+  }
+
+  /// Fetch the site's 'permalink:' setting from _config.yml and store it
+  /// on the config. Best-effort: transient failures (and a provider
+  /// disposed mid-fetch) keep whatever pattern is already stored, and a
+  /// config change mid-fetch discards the result.
+  Future<void> refreshPermalinkPattern() async {
+    try {
+      final config = currentConfig;
+      if (config == null) return;
+
+      final pattern =
+          await ref.read(repoRepositoryProvider).fetchPermalinkPattern(
+                repoOwner: config.repoOwner,
+                repoName: config.repoName,
+                branch: config.branch,
+              );
+
+      final current = currentConfig;
+      if (current == null ||
+          current.repoOwner != config.repoOwner ||
+          current.repoName != config.repoName ||
+          current.branch != config.branch ||
+          current.permalinkPattern == pattern) {
+        return;
+      }
+
+      final updated = current.copyWith(permalinkPattern: pattern);
+      final box = ref.read(appConfigBoxProvider);
+      await box.put(_configKey, updated);
+      state = ConfigLoaded(updated);
+    } catch (_) {
+      // Offline / rate limited / disposed: the save must never fail or
+      // crash because permalink discovery did
+    }
   }
 
   /// Switch the content dir the app syncs from / publishes to. Unlike

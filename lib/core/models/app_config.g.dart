@@ -30,13 +30,14 @@ class AppConfigAdapter extends TypeAdapter<AppConfig> {
       ..defaultCategoriesRaw = (fields[9] as List?)?.cast<String>()
       ..defaultTagsRaw = (fields[10] as List?)?.cast<String>()
       ..contentDirsRaw = (fields[11] as List?)?.cast<String>()
-      ..activeContentDirRaw = fields[12] as String?;
+      ..activeContentDirRaw = fields[12] as String?
+      ..permalinkPatternRaw = fields[13] as String?;
   }
 
   @override
   void write(BinaryWriter writer, AppConfig obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.repoOwner)
       ..writeByte(1)
@@ -62,7 +63,9 @@ class AppConfigAdapter extends TypeAdapter<AppConfig> {
       ..writeByte(11)
       ..write(obj.contentDirsRaw)
       ..writeByte(12)
-      ..write(obj.activeContentDirRaw);
+      ..write(obj.activeContentDirRaw)
+      ..writeByte(13)
+      ..write(obj.permalinkPatternRaw);
   }
 
   @override

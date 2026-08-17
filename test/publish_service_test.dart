@@ -17,6 +17,7 @@ class _FakeUploadService extends GitHubUploadService {
   String? uploadedContent;
   String? uploadedCommitMessage;
   String? uploadedExistingSha;
+  bool? uploadedForce;
 
   @override
   Future<bool> postExists({
@@ -34,11 +35,13 @@ class _FakeUploadService extends GitHubUploadService {
     required String content,
     String? existingSha,
     String? commitMessage,
+    bool force = false,
   }) async {
     uploadedPath = path;
     uploadedContent = content;
     uploadedCommitMessage = commitMessage;
     uploadedExistingSha = existingSha;
+    uploadedForce = force;
     return const UploadSuccess(sha: 'new_sha', htmlUrl: 'https://x');
   }
 }
@@ -266,6 +269,24 @@ void main() {
       );
 
       expect(uploads.uploadedPath, 'docs/_posts/2024-01-01-old.md');
+    });
+
+    test('force (conflict overwrite) threads through to the upload',
+        () async {
+      await service.updatePost(
+        config: AppConfig(repoOwner: 'o', repoName: 'r'),
+        originalPost: post(filePath: '_posts/2024-01-01-old.md'),
+        newBodyContent: 'new body',
+        force: true,
+      );
+      expect(uploads.uploadedForce, isTrue);
+
+      await service.updatePost(
+        config: AppConfig(repoOwner: 'o', repoName: 'r'),
+        originalPost: post(filePath: '_posts/2024-01-01-old.md'),
+        newBodyContent: 'new body',
+      );
+      expect(uploads.uploadedForce, isFalse);
     });
   });
 

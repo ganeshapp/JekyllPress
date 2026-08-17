@@ -25,6 +25,8 @@ void main() async {
   await Hive.openBox<BlogPost>('posts_box');
   await Hive.openBox<String>('local_image_map');
   await Hive.openBox<LocalDraft>('drafts_box');
+  // Offline publish queue - plain-map entries, no TypeAdapter
+  await Hive.openBox<Map>('publish_queue');
 
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(

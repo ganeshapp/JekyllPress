@@ -4,6 +4,40 @@ import 'package:dio/dio.dart';
 import '../models/app_config.dart';
 import 'dio_client.dart';
 
+/// Classifies a publish/upload failure so the UI can offer targeted
+/// recovery (conflict dialog, offline queue) without string matching.
+/// Threaded verbatim through UploadFailure -> PublishFailure ->
+/// PublishFailed.
+enum PublishErrorKind {
+  /// Anything without a dedicated recovery flow
+  generic,
+
+  /// The file changed on GitHub since it was loaded (stale sha that the
+  /// automatic refetch-retry could not resolve)
+  conflict,
+
+  /// Connectivity-class failure (no connection / timeout) - the
+  /// operation can be queued and retried when back online
+  offline,
+}
+
+/// Kind classification for a raw error thrown outside the upload
+/// helpers (e.g. postExists rethrows DioExceptions)
+PublishErrorKind publishErrorKindOf(Object error) {
+  if (error is DioException && !ApiClient.isRateLimit(error)) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        return PublishErrorKind.offline;
+      default:
+        return PublishErrorKind.generic;
+    }
+  }
+  return PublishErrorKind.generic;
+}
+
 /// Result of an upload operation
 sealed class UploadResult {
   const UploadResult();
@@ -17,7 +51,22 @@ class UploadSuccess extends UploadResult {
 
 class UploadFailure extends UploadResult {
   final String message;
-  const UploadFailure(this.message);
+  final PublishErrorKind kind;
+  const UploadFailure(this.message, {this.kind = PublishErrorKind.generic});
+}
+
+/// Result of a delete operation
+sealed class DeleteResult {
+  const DeleteResult();
+}
+
+class DeleteSuccess extends DeleteResult {
+  const DeleteSuccess();
+}
+
+class DeleteFailure extends DeleteResult {
+  final String message;
+  const DeleteFailure(this.message);
 }
 
 /// Service for uploading files to GitHub repository.
@@ -122,12 +171,18 @@ class GitHubUploadService {
   /// e.g. _posts/2024-01-01-foo.md or _wiki/foo.md).
   /// On a stale-sha conflict for an update (409, or 422 sha mismatch),
   /// re-fetches the file's current sha once and retries the PUT once.
+  /// The residual conflict failure carries [PublishErrorKind.conflict].
+  ///
+  /// [force] deliberately overwrites the remote version: the file's
+  /// CURRENT sha is fetched up front and used for the PUT, so the write
+  /// wins regardless of edits made on GitHub since [existingSha].
   Future<UploadResult> uploadPost({
     required AppConfig config,
     required String path,
     required String content,
     String? existingSha,
     String? commitMessage,
+    bool force = false,
   }) async {
     final base64Content = base64Encode(utf8.encode(content));
     final filename = path.split('/').last;
@@ -144,16 +199,24 @@ class GitHubUploadService {
       return body;
     }
 
+    var sha = existingSha;
+    if (force) {
+      // Overwrite-with-my-version: swap in the current sha (kept stale
+      // when it cannot be read - the PUT then surfaces the real error)
+      sha = await _fetchCurrentSha(config: config, filePath: path) ??
+          existingSha;
+    }
+
     try {
       return await _putFile(
         config: config,
         filePath: path,
-        body: buildBody(existingSha),
+        body: buildBody(sha),
       );
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode;
       final ghMessage = _extractGitHubMessage(e);
-      final isShaConflict = existingSha != null &&
+      final isShaConflict = sha != null &&
           (statusCode == 409 ||
               (statusCode == 422 && ghMessage.toLowerCase().contains('sha')));
 
@@ -162,14 +225,16 @@ class GitHubUploadService {
       }
 
       // Stale sha: re-fetch the current sha once and retry the PUT once
-      const staleMessage =
-          'This post changed on GitHub since it was loaded. Pull to refresh and retry.';
+      const staleFailure = UploadFailure(
+        'This post changed on GitHub since it was loaded. Pull to refresh and retry.',
+        kind: PublishErrorKind.conflict,
+      );
       final freshSha = await _fetchCurrentSha(
         config: config,
         filePath: path,
       );
       if (freshSha == null) {
-        return const UploadFailure(staleMessage);
+        return staleFailure;
       }
       try {
         return await _putFile(
@@ -177,12 +242,84 @@ class GitHubUploadService {
           filePath: path,
           body: buildBody(freshSha),
         );
-      } on DioException {
-        return const UploadFailure(staleMessage);
+      } on DioException catch (retryError) {
+        // Went offline mid-retry reads as offline, not conflict
+        final retried = _handleDioError(retryError);
+        return retried.kind == PublishErrorKind.offline
+            ? retried
+            : staleFailure;
       }
     } catch (e) {
       return UploadFailure('Upload failed: $e');
     }
+  }
+
+  /// Delete the file at [path] (full repo-relative path) on the
+  /// configured branch. Mirrors [uploadPost]'s conflict handling: on a
+  /// stale-sha conflict (409, or 422 sha mismatch) the current sha is
+  /// re-fetched once and the DELETE retried once. A 404 means the file
+  /// is already gone and counts as success.
+  Future<DeleteResult> deleteFile({
+    required AppConfig config,
+    required String path,
+    required String sha,
+    String? commitMessage,
+  }) async {
+    Future<DeleteResult> doDelete(String currentSha) async {
+      final response = await _dio.delete(
+        '/repos/${config.repoOwner}/${config.repoName}/contents/$path',
+        data: {
+          'message': commitMessage ?? 'Delete: ${path.split('/').last}',
+          'sha': currentSha,
+          'branch': config.branch,
+        },
+      );
+      if (response.statusCode == 200) {
+        return const DeleteSuccess();
+      }
+      return const DeleteFailure('Unexpected response from GitHub');
+    }
+
+    try {
+      return await doDelete(sha);
+    } on DioException catch (e) {
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 404) {
+        // Already deleted on GitHub - the desired end state
+        return const DeleteSuccess();
+      }
+      final ghMessage = _extractGitHubMessage(e);
+      final isShaConflict = statusCode == 409 ||
+          (statusCode == 422 && ghMessage.toLowerCase().contains('sha'));
+      if (!isShaConflict) {
+        return DeleteFailure(_handleDioError(e).message);
+      }
+
+      // Stale sha: re-fetch the current sha once and retry the DELETE once
+      const staleMessage =
+          'This post changed on GitHub since it was loaded. Pull to refresh and retry.';
+      final freshSha = await _fetchCurrentSha(config: config, filePath: path);
+      if (freshSha == null) {
+        return const DeleteFailure(staleMessage);
+      }
+      try {
+        return await doDelete(freshSha);
+      } on DioException {
+        return const DeleteFailure(staleMessage);
+      }
+    } catch (e) {
+      return DeleteFailure('Delete failed: $e');
+    }
+  }
+
+  /// Current sha of [path] on the configured branch, or null when it
+  /// cannot be read (deleted, offline). Used by the conflict-resolution
+  /// 'Keep both' flow to reload the remote version.
+  Future<String?> fetchCurrentSha({
+    required AppConfig config,
+    required String path,
+  }) {
+    return _fetchCurrentSha(config: config, filePath: path);
   }
 
   /// PUT a file to the contents API. Throws DioException on HTTP errors.
@@ -244,7 +381,8 @@ class GitHubUploadService {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return const UploadFailure('Upload timed out. Please try again.');
+        return const UploadFailure('Upload timed out. Please try again.',
+            kind: PublishErrorKind.offline);
       case DioExceptionType.badResponse:
         final statusCode = e.response?.statusCode;
         final ghMessage = _extractGitHubMessage(e);
@@ -262,7 +400,8 @@ class GitHubUploadService {
         }
         return UploadFailure('GitHub error ($statusCode): $message');
       case DioExceptionType.connectionError:
-        return const UploadFailure('No internet connection');
+        return const UploadFailure('No internet connection',
+            kind: PublishErrorKind.offline);
       default:
         return UploadFailure('Network error: ${e.message}');
     }

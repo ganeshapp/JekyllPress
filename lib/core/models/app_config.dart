@@ -59,6 +59,10 @@ class AppConfig extends HiveObject {
   @HiveField(12)
   String? activeContentDirRaw;
 
+  /// Stored value for [permalinkPattern]; null in v1 records
+  @HiveField(13)
+  String? permalinkPatternRaw;
+
   /// Directory Jekyll posts live in ('' is treated as unset)
   String get postsPath =>
       (postsPathRaw?.isNotEmpty ?? false) ? postsPathRaw! : '_posts';
@@ -91,6 +95,11 @@ class AppConfig extends HiveObject {
           ? activeContentDirRaw!
           : postsPath;
 
+  /// Jekyll permalink pattern discovered in the site's _config.yml
+  /// (e.g. '/blog/:title/' or 'pretty'); '' = unknown, so post URLs use
+  /// Jekyll's default 'date' style
+  String get permalinkPattern => permalinkPatternRaw ?? '';
+
   AppConfig({
     required this.repoOwner,
     required this.repoName,
@@ -105,6 +114,7 @@ class AppConfig extends HiveObject {
     List<String>? defaultTags,
     List<String>? contentDirs,
     String? activeContentDir,
+    String? permalinkPattern,
   })  : postsPathRaw = postsPath,
         draftsPathRaw = draftsPath,
         siteUrlRaw = siteUrl,
@@ -112,7 +122,8 @@ class AppConfig extends HiveObject {
         defaultCategoriesRaw = defaultCategories,
         defaultTagsRaw = defaultTags,
         contentDirsRaw = contentDirs,
-        activeContentDirRaw = activeContentDir;
+        activeContentDirRaw = activeContentDir,
+        permalinkPatternRaw = permalinkPattern;
 
   AppConfig copyWith({
     String? repoOwner,
@@ -128,6 +139,7 @@ class AppConfig extends HiveObject {
     List<String>? defaultTags,
     List<String>? contentDirs,
     String? activeContentDir,
+    String? permalinkPattern,
   }) {
     return AppConfig(
       repoOwner: repoOwner ?? this.repoOwner,
@@ -143,6 +155,7 @@ class AppConfig extends HiveObject {
       defaultTags: defaultTags ?? defaultTagsRaw,
       contentDirs: contentDirs ?? contentDirsRaw,
       activeContentDir: activeContentDir ?? activeContentDirRaw,
+      permalinkPattern: permalinkPattern ?? permalinkPatternRaw,
     );
   }
 }

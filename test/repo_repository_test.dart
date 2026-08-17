@@ -160,6 +160,95 @@ void main() {
     });
   });
 
+  group('parsePermalinkSetting', () {
+    test('extracts a top-level permalink value', () {
+      expect(
+        parsePermalinkSetting('title: Blog\npermalink: /blog/:title/\n'),
+        '/blog/:title/',
+      );
+    });
+
+    test('strips quotes and trailing comments', () {
+      expect(
+        parsePermalinkSetting('permalink: "/blog/:title/" # site-wide'),
+        '/blog/:title/',
+      );
+      expect(parsePermalinkSetting("permalink: 'pretty'"), 'pretty');
+      expect(parsePermalinkSetting('permalink: pretty # default'), 'pretty');
+    });
+
+    test('ignores indented (non-top-level) permalink keys', () {
+      const yaml = 'collections:\n'
+          '  wiki:\n'
+          '    permalink: /wiki/:title/\n';
+      expect(parsePermalinkSetting(yaml), '');
+    });
+
+    test('absent key yields the empty string', () {
+      expect(parsePermalinkSetting('title: Blog\n'), '');
+    });
+  });
+
+  group('RepoRepository.fetchPermalinkPattern', () {
+    test('reads _config.yml raw on the branch and parses the pattern',
+        () async {
+      final requests = <RequestOptions>[];
+      final dio = dioWithResponse((options) {
+        requests.add(options);
+        return ResponseBody.fromString(
+          'markdown: kramdown\npermalink: /blog/:title/\n',
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['text/plain'],
+          },
+        );
+      });
+
+      final pattern = await RepoRepository(dio: dio).fetchPermalinkPattern(
+        repoOwner: 'gapp',
+        repoName: 'blog',
+        branch: 'dev',
+      );
+
+      expect(pattern, '/blog/:title/');
+      final request = requests.single;
+      expect(request.path, '/repos/gapp/blog/contents/_config.yml');
+      expect(request.queryParameters['ref'], 'dev');
+      expect(request.headers['Accept'], 'application/vnd.github.raw+json');
+    });
+
+    test('404 (no _config.yml) is a definitive empty pattern', () async {
+      final dio = dioWithResponse(
+          (options) => jsonResponse('{"message":"Not Found"}', 404));
+
+      final pattern = await RepoRepository(dio: dio).fetchPermalinkPattern(
+        repoOwner: 'gapp',
+        repoName: 'blog',
+        branch: 'main',
+      );
+
+      expect(pattern, '');
+    });
+
+    test('network failures throw (callers keep the stored pattern)',
+        () async {
+      final dio = dioWithError((options) => DioException(
+            requestOptions: options,
+            type: DioExceptionType.connectionError,
+          ));
+
+      expect(
+        () => RepoRepository(dio: dio).fetchPermalinkPattern(
+          repoOwner: 'gapp',
+          repoName: 'blog',
+          branch: 'main',
+        ),
+        throwsA(predicate(
+            (e) => e.toString().contains('No internet connection'))),
+      );
+    });
+  });
+
   group('RepoRepository.isJekyllRepo', () {
     test('_config.yml on the branch means jekyll', () async {
       final requests = <RequestOptions>[];

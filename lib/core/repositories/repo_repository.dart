@@ -17,6 +17,29 @@ enum JekyllRepoCheck {
   couldNotVerify,
 }
 
+/// Extract the top-level 'permalink:' value from raw _config.yml text.
+/// Returns '' when absent. Quotes are stripped; unquoted values lose a
+/// trailing '# comment'.
+String parsePermalinkSetting(String configYaml) {
+  final entryRegex = RegExp(r'^permalink[^\S\n]*:(.*)$');
+  for (final line in configYaml.replaceAll('\r\n', '\n').split('\n')) {
+    final match = entryRegex.firstMatch(line);
+    if (match == null) continue;
+    var value = match.group(1)!.trim();
+    if (value.startsWith('"') || value.startsWith("'")) {
+      final quote = value[0];
+      final end = value.indexOf(quote, 1);
+      return end > 0 ? value.substring(1, end) : '';
+    }
+    final hash = value.indexOf('#');
+    if (hash != -1) {
+      value = value.substring(0, hash).trim();
+    }
+    return value;
+  }
+  return '';
+}
+
 /// Repository for fetching GitHub repositories.
 /// Auth is handled by the shared [ApiClient] Dio.
 class RepoRepository {
@@ -114,6 +137,37 @@ class RepoRepository {
       }
       throw Exception('Failed to fetch branches');
     } on DioException catch (e) {
+      throw ApiException(ApiClient.friendlyError(e));
+    }
+  }
+
+  /// Best-effort read of the site's top-level 'permalink:' setting from
+  /// _config.yml on [branch]. Returns '' when the file or key is absent
+  /// (a definitive "no pattern"); throws on network/auth errors so
+  /// callers don't clobber a previously discovered pattern.
+  Future<String> fetchPermalinkPattern({
+    required String repoOwner,
+    required String repoName,
+    required String branch,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/repos/$repoOwner/$repoName/contents/_config.yml',
+        queryParameters: {'ref': branch},
+        options: Options(
+          headers: {'Accept': 'application/vnd.github.raw+json'},
+          responseType: ResponseType.plain,
+        ),
+      );
+      final data = response.data;
+      if (response.statusCode == 200 && data is String) {
+        return parsePermalinkSetting(data);
+      }
+      return '';
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return '';
+      }
       throw ApiException(ApiClient.friendlyError(e));
     }
   }

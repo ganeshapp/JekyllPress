@@ -1,10 +1,18 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:jekyllpress/core/models/app_config.dart';
 import 'package:jekyllpress/core/providers/config_provider.dart';
+import 'package:jekyllpress/core/repositories/repo_repository.dart';
+
+import 'fakes.dart';
+
+/// Let the unawaited background permalink fetch land
+Future<void> _settle() =>
+    Future<void>.delayed(const Duration(milliseconds: 20));
 
 void main() {
   group('inferPagesSite', () {
@@ -41,17 +49,38 @@ void main() {
     late Box<AppConfig> configBox;
     late ProviderContainer container;
 
+    /// What the fake GitHub serves for _config.yml; null = 404
+    String? configYaml;
+
     setUp(() async {
+      configYaml = null;
       tempDir = await Directory.systemTemp.createTemp('config_test');
       Hive.init(tempDir.path);
       if (!Hive.isAdapterRegistered(0)) {
         Hive.registerAdapter(AppConfigAdapter());
       }
       configBox = await Hive.openBox<AppConfig>('app_config');
-      container = ProviderContainer();
+      container = ProviderContainer(
+        overrides: [
+          // Keep the background permalink discovery off the real network
+          repoRepositoryProvider.overrideWithValue(
+            RepoRepository(
+              dio: dioWithResponse((options) {
+                final yaml = configYaml;
+                if (yaml != null && options.path.endsWith('_config.yml')) {
+                  return ResponseBody.fromString(yaml, 200);
+                }
+                return jsonResponse('{"message":"Not Found"}', 404);
+              }),
+            ),
+          ),
+        ],
+      );
     });
 
     tearDown(() async {
+      // Let any in-flight background permalink fetch finish first
+      await _settle();
       container.dispose();
       await Hive.close();
       await tempDir.delete(recursive: true);
@@ -165,6 +194,57 @@ void main() {
 
       expect(configBox.get('current_config'), isNull);
       expect(container.read(configNotifierProvider), isA<ConfigNotSet>());
+    });
+
+    test('discovers the permalink pattern from _config.yml in the '
+        'background without blocking the save', () async {
+      configYaml = 'markdown: kramdown\npermalink: /blog/:title/\n';
+
+      await container.read(configNotifierProvider.notifier).saveConfig(
+            repoOwner: 'gapp',
+            repoName: 'notes',
+            branch: 'main',
+            assetsPath: 'assets/images',
+          );
+
+      // The save itself never waits for the fetch
+      expect(configBox.get('current_config')!.permalinkPattern, '');
+
+      await _settle();
+
+      expect(configBox.get('current_config')!.permalinkPattern,
+          '/blog/:title/');
+      final state = container.read(configNotifierProvider);
+      expect((state as ConfigLoaded).config.permalinkPattern,
+          '/blog/:title/');
+    });
+
+    test('a repo switch resets the pattern instead of keeping the old '
+        'site\'s one', () async {
+      configYaml = 'permalink: /blog/:title/\n';
+      final notifier = container.read(configNotifierProvider.notifier);
+      await notifier.saveConfig(
+        repoOwner: 'gapp',
+        repoName: 'notes',
+        branch: 'main',
+        assetsPath: 'assets/images',
+      );
+      await _settle();
+      expect(configBox.get('current_config')!.permalinkPattern,
+          '/blog/:title/');
+
+      // New repo has no _config.yml
+      configYaml = null;
+      await notifier.saveConfig(
+        repoOwner: 'gapp',
+        repoName: 'other',
+        branch: 'main',
+        assetsPath: 'assets/images',
+      );
+
+      expect(configBox.get('current_config')!.permalinkPattern, '');
+      await _settle();
+      expect(configBox.get('current_config')!.permalinkPattern, '');
     });
 
     test('v2 fields are persisted', () async {
