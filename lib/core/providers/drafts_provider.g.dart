@@ -6,7 +6,7 @@ part of 'drafts_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$draftsBoxHash() => r'992a8ecdc6306371a7425e43474d73b9c62ae54d';
+String _$draftsBoxHash() => r'6880541975c9c3f0361294847abcb90c7f724a84';
 
 /// Provider for accessing the drafts Hive box
 ///
@@ -24,7 +24,7 @@ final draftsBoxProvider = AutoDisposeProvider<Box<LocalDraft>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef DraftsBoxRef = AutoDisposeProviderRef<Box<LocalDraft>>;
-String _$draftsNotifierHash() => r'3ab49bac08b14c2f2a46c42b94b02cfb4ed27a0d';
+String _$draftsNotifierHash() => r'ec1d0dc15ea4cec4044e18c63c7b25cb99c7985d';
 
 /// Manages local drafts - saving, loading, and deleting
 ///
@@ -43,7 +43,7 @@ final draftsNotifierProvider =
 
 typedef _$DraftsNotifier = AutoDisposeNotifier<DraftsState>;
 String _$currentDraftNotifierHash() =>
-    r'2178d634cd1084b1b7bc136da9df89ad38cfbacb';
+    r'39fb1498d0f297e44002d929fd021416a7b01a8c';
 
 /// Manages the current editing session's draft state
 ///

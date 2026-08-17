@@ -43,20 +43,41 @@ class PublishService {
       return const PublishFailure('Title cannot be empty');
     }
 
-    // Generate date
+    // Generate date (filename keeps the date-only prefix)
     final now = DateTime.now();
     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     // Generate filename: YYYY-MM-DD-kebab-case-title.md
-    final kebabTitle = _toKebabCase(title);
-    final filename = '$dateStr-$kebabTitle.md';
+    // If the exact path is taken, suffix the slug -2..-9 until free
+    final kebabTitle = toKebabCase(title, now: now);
+    var filename = '$dateStr-$kebabTitle.md';
+    try {
+      var taken = await _uploadService.postExists(
+        config: config,
+        filename: filename,
+      );
+      var suffix = 2;
+      while (taken && suffix <= 9) {
+        filename = '$dateStr-$kebabTitle-$suffix.md';
+        taken = await _uploadService.postExists(
+          config: config,
+          filename: filename,
+        );
+        suffix++;
+      }
+      if (taken) {
+        return const PublishFailure(
+            'Too many posts with this title already exist for today. Please choose a different title.');
+      }
+    } catch (e) {
+      return PublishFailure('Could not check for existing posts: $e');
+    }
 
-    // Generate frontmatter
+    // Generate minimal frontmatter (title + date only; the blog's
+    // _config.yml defaults supply layout)
     final frontmatter = FrontmatterParser.generateFrontmatter(
       title: title,
-      date: dateStr,
-      layout: 'single',
-      categories: const ['blog'],
+      date: formatJekyllDate(now),
     );
 
     // Combine frontmatter and body
@@ -102,12 +123,10 @@ class PublishService {
       // Use original frontmatter wrapped in delimiters
       frontmatter = '---\n${originalPost.rawFrontmatter}\n---';
     } else {
-      // Generate frontmatter from post data
+      // Generate minimal frontmatter from post data (title + date only)
       frontmatter = FrontmatterParser.generateFrontmatter(
         title: originalPost.title,
         date: originalPost.date,
-        layout: 'single',
-        categories: const ['blog'],
       );
     }
 
@@ -133,19 +152,56 @@ class PublishService {
     };
   }
 
-  /// Convert title to kebab-case for filename
-  String _toKebabCase(String title) {
-    return title
+  /// Convert title to kebab-case for filename.
+  /// Unicode-aware: Korean/Japanese/accented characters are kept.
+  /// Public so it can be unit tested. [now] is used for the empty-slug
+  /// fallback and defaults to the current time.
+  static String toKebabCase(String title, {DateTime? now}) {
+    var slug = title
         .toLowerCase()
         .trim()
-        // Replace special chars with spaces
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        // Replace multiple spaces/hyphens with single hyphen
-        .replaceAll(RegExp(r'[\s_]+'), '-')
+        // Remove apostrophes (straight and curly) entirely
+        .replaceAll(RegExp("['‘’]"), '')
+        // Replace every run of non-letter/non-number chars with one hyphen
+        .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), '-')
         // Remove leading/trailing hyphens
-        .replaceAll(RegExp(r'^-+|-+$'), '')
-        // Limit length
-        .substring(0, title.length > 50 ? 50 : title.length)
-        .replaceAll(RegExp(r'-+$'), ''); // Clean trailing hyphen after truncation
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+
+    // Limit length: cut at 50, then back to the last hyphen if that
+    // leaves more than 20 chars
+    if (slug.length > 50) {
+      var cut = slug.substring(0, 50);
+      final lastHyphen = cut.lastIndexOf('-');
+      if (lastHyphen > 20) {
+        cut = cut.substring(0, lastHyphen);
+      }
+      slug = cut.replaceAll(RegExp(r'-+$'), '');
+    }
+
+    // Fallback for punctuation-only titles
+    if (slug.isEmpty) {
+      final t = now ?? DateTime.now();
+      final hh = t.hour.toString().padLeft(2, '0');
+      final mm = t.minute.toString().padLeft(2, '0');
+      final ss = t.second.toString().padLeft(2, '0');
+      return 'post-$hh$mm$ss';
+    }
+
+    return slug;
+  }
+
+  /// Format a Jekyll front matter timestamp: 'YYYY-MM-DD HH:MM:SS +HHMM'
+  /// using the device's local time and offset.
+  /// Public so it can be unit tested.
+  static String formatJekyllDate(DateTime dateTime) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final offset = dateTime.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final absOffset = offset.abs();
+    final offsetStr =
+        '$sign${two(absOffset.inHours)}${two(absOffset.inMinutes % 60)}';
+    return '${dateTime.year}-${two(dateTime.month)}-${two(dateTime.day)} '
+        '${two(dateTime.hour)}:${two(dateTime.minute)}:${two(dateTime.second)} '
+        '$offsetStr';
   }
 }

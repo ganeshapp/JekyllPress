@@ -90,18 +90,45 @@ class ContentService {
     final token = await _secureStorage.getToken();
     if (token == null) throw Exception('Not authenticated');
 
+    final url = '/repos/${config.repoOwner}/${config.repoName}/contents/$path';
     final response = await _dio.get(
-      '/repos/${config.repoOwner}/${config.repoName}/contents/$path',
+      url,
       options: Options(
         headers: {'Authorization': 'Bearer $token'},
       ),
     );
 
     if (response.statusCode == 200 && response.data != null) {
-      final content = response.data['content'] as String;
-      // GitHub returns base64 encoded content
-      final decoded = utf8.decode(base64.decode(content.replaceAll('\n', '')));
-      return decoded;
+      final encoding = response.data['encoding'] as String?;
+      if (encoding == 'base64') {
+        final content = response.data['content'] as String;
+        // GitHub returns base64 encoded content
+        final decoded = utf8.decode(base64.decode(content.replaceAll('\n', '')));
+        return decoded;
+      }
+
+      // For 1-100MB files the contents API returns content: "" with
+      // encoding: "none". Re-fetch the raw file content instead of
+      // silently returning an empty post (which would enable data loss
+      // if the truncated post were published back).
+      final rawResponse = await _dio.get(
+        url,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/vnd.github.raw+json',
+          },
+          responseType: ResponseType.plain,
+        ),
+      );
+      final rawData = rawResponse.data;
+      if (rawResponse.statusCode == 200 &&
+          rawData is String &&
+          rawData.isNotEmpty) {
+        return rawData;
+      }
+      throw Exception(
+          'Failed to fetch "$path": content encoding is "$encoding" (file may be too large for the contents API) and the raw download also failed.');
     }
     throw Exception('Failed to fetch file content');
   }

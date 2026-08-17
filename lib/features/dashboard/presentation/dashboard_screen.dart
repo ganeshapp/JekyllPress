@@ -7,6 +7,7 @@ import '../../../core/models/local_draft.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/config_provider.dart';
 import '../../../core/providers/drafts_provider.dart';
+import '../../../core/providers/image_provider.dart';
 import '../../../core/providers/posts_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../about/presentation/about_screen.dart';
@@ -54,10 +55,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     await ref.read(postsNotifierProvider.notifier).refresh();
   }
 
-  void _navigateToEditor([BlogPost? post]) {
+  Future<void> _navigateToEditor([BlogPost? post]) async {
+    LocalDraft? resumeDraft;
+
+    // Before opening a published post, check for unpublished edits so a
+    // newer edit-draft is never silently overwritten
+    if (post != null) {
+      final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
+      final existingDraft = draftsNotifier.getDraftForPost(post);
+      final hasDivergingEdits = existingDraft != null &&
+          (existingDraft.title != post.title ||
+              existingDraft.bodyContent != post.bodyContent);
+
+      if (hasDivergingEdits) {
+        final resume = await _confirmResumeDraft(existingDraft);
+        if (resume == null) return; // Dialog dismissed - don't open
+        if (resume) {
+          resumeDraft = existingDraft;
+        } else {
+          await draftsNotifier.deleteDraft(existingDraft.id);
+        }
+      }
+    }
+
+    if (!mounted) return;
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => EditorScreen(post: post),
+        pageBuilder: (context, animation, secondaryAnimation) => EditorScreen(
+          post: post,
+          resumeDraft: resumeDraft,
+        ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 0.05);
           const end = Offset.zero;
@@ -124,6 +151,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       // Refresh drafts when returning from editor
       ref.read(draftsNotifierProvider.notifier).refresh();
     });
+  }
+
+  /// Ask whether to resume or discard unpublished edits for a post.
+  /// Returns true = resume, false = discard, null = dismissed.
+  Future<bool?> _confirmResumeDraft(LocalDraft draft) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Unpublished Edits'),
+        content: Text(
+          'You have unpublished edits for this post '
+          '(last modified ${_formatTimeAgo(draft.lastModified)}).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Discard edits'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Resume my edits'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -353,10 +412,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             ],
             onSelected: (value) async {
               if (value == 'logout') {
-                await ref.read(configNotifierProvider.notifier).clearConfig();
-                await ref.read(authNotifierProvider.notifier).logout();
+                await _confirmLogout();
               } else if (value == 'change_repo') {
-                await ref.read(configNotifierProvider.notifier).clearConfig();
+                await _confirmChangeRepository();
               } else if (value == 'about') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -371,15 +429,109 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
+  /// Confirm and perform logout: clears the token and ALL local data
+  /// (posts cache, drafts, image map, local images) so nothing leaks to
+  /// the next account on this device
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Logout?'),
+        content: const Text(
+          'This removes your token and clears all cached posts, drafts, '
+          'and images from this device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await _clearLocalData();
+    await ref.read(configNotifierProvider.notifier).clearConfig();
+    await ref.read(authNotifierProvider.notifier).logout();
+  }
+
+  /// Confirm and perform repository change: clears config plus the posts
+  /// cache and drafts, which are specific to the current repository
+  Future<void> _confirmChangeRepository() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Change Repository?'),
+        content: const Text(
+          'Drafts and cached posts are specific to this repository and '
+          'will be removed. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE57373),
+            ),
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await _clearLocalData();
+    await ref.read(configNotifierProvider.notifier).clearConfig();
+  }
+
+  /// Wipe all repo/account-scoped local data: posts cache, drafts,
+  /// the local image map, and the local images directory
+  Future<void> _clearLocalData() async {
+    await ref.read(postsNotifierProvider.notifier).clearAll();
+    await ref.read(draftsNotifierProvider.notifier).clearAll();
+    await ref.read(localImageMapBoxProvider).clear();
+    await ref.read(imageServiceProvider).clearAllLocalImages();
+  }
+
   Widget _buildContent(PostsState postsState) {
     return switch (postsState) {
       PostsInitial() => _buildLoadingView(),
       PostsLoading(cachedPosts: final cached) => cached.isEmpty
           ? _buildLoadingView()
           : _buildPostsList(cached, isLoading: true),
-      PostsLoaded(posts: final posts) => posts.isEmpty
-          ? const EmptyPostsView()
-          : _buildPostsList(posts),
+      PostsLoaded(
+        posts: final posts,
+        syncError: final syncError,
+        lastSynced: final lastSynced,
+      ) =>
+        posts.isEmpty
+            ? const EmptyPostsView()
+            : _buildPostsList(
+                posts,
+                errorMessage: syncError,
+                lastSynced: lastSynced,
+              ),
       PostsError(message: final msg, cachedPosts: final cached) => cached.isEmpty
           ? _buildErrorView(msg)
           : _buildPostsList(cached, errorMessage: msg),
@@ -458,20 +610,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     List<BlogPost> posts, {
     bool isLoading = false,
     String? errorMessage,
+    DateTime? lastSynced,
   }) {
+    // Header row: sync-failure banner takes priority, otherwise a subtle
+    // "last synced" caption when we know the sync time
+    final hasHeader = errorMessage != null || lastSynced != null;
+
     return RefreshIndicator(
       onRefresh: _onRefresh,
       color: const Color(0xFFE8A87C),
       backgroundColor: const Color(0xFF1A2F23),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-        itemCount: posts.length + (errorMessage != null ? 1 : 0),
+        itemCount: posts.length + (hasHeader ? 1 : 0),
         itemBuilder: (context, index) {
-          if (errorMessage != null && index == 0) {
-            return _buildSyncErrorBanner(errorMessage);
+          if (hasHeader && index == 0) {
+            return errorMessage != null
+                ? _buildSyncErrorBanner(errorMessage)
+                : _buildLastSyncedCaption(lastSynced!);
           }
-          
-          final postIndex = errorMessage != null ? index - 1 : index;
+
+          final postIndex = hasHeader ? index - 1 : index;
           final post = posts[postIndex];
           
           return TweenAnimationBuilder<double>(
@@ -515,7 +674,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Sync failed. Showing cached data.',
+              'Sync failed - showing cached data',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFFE57373),
                     fontSize: 13,
@@ -527,6 +686,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             child: const Text('Retry'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLastSyncedCaption(DateTime lastSynced) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        'Last synced ${_formatTimeAgo(lastSynced).toLowerCase()}',
+        style: const TextStyle(
+          fontSize: 11,
+          color: Color(0xFFA8B5A0),
+        ),
       ),
     );
   }
@@ -558,24 +730,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       return _buildEmptyDraftsView();
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-      itemCount: draftsState.drafts.length,
-      itemBuilder: (context, index) {
-        final draft = draftsState.drafts[index];
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: 300 + (index * 50)),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Transform.translate(
-              offset: Offset(0, 20 * (1 - value)),
-              child: Opacity(opacity: value, child: child),
-            );
-          },
-          child: _buildDraftCard(draft),
-        );
+    return RefreshIndicator(
+      onRefresh: () async {
+        HapticFeedback.mediumImpact();
+        ref.read(draftsNotifierProvider.notifier).refresh();
       },
+      color: const Color(0xFFE8A87C),
+      backgroundColor: const Color(0xFF1A2F23),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        itemCount: draftsState.drafts.length,
+        itemBuilder: (context, index) {
+          final draft = draftsState.drafts[index];
+          return TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: Duration(milliseconds: 300 + (index * 50)),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Transform.translate(
+                offset: Offset(0, 20 * (1 - value)),
+                child: Opacity(opacity: value, child: child),
+              );
+            },
+            child: _buildDraftCard(draft),
+          );
+        },
+      ),
     );
   }
 

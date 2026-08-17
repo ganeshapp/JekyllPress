@@ -67,20 +67,26 @@ class PublishNotifier extends _$PublishNotifier {
 
     state = const Publishing('Creating post...');
 
-    final publishService = ref.read(publishServiceProvider);
-    final result = await publishService.createPost(
-      config: config,
-      title: title,
-      bodyContent: bodyContent,
-    );
+    try {
+      final publishService = ref.read(publishServiceProvider);
+      final result = await publishService.createPost(
+        config: config,
+        title: title,
+        bodyContent: bodyContent,
+      );
 
-    switch (result) {
-      case PublishSuccess(filename: final f, htmlUrl: final url):
-        state = PublishSucceeded(filename: f, htmlUrl: url);
-        return true;
-      case PublishFailure(message: final msg):
-        state = PublishFailed(msg);
-        return false;
+      switch (result) {
+        case PublishSuccess(filename: final f, htmlUrl: final url):
+          state = PublishSucceeded(filename: f, htmlUrl: url);
+          return true;
+        case PublishFailure(message: final msg):
+          state = PublishFailed(msg);
+          return false;
+      }
+    } catch (e) {
+      // Never let an exception escape to the async zone - surface it
+      state = PublishFailed('Publish failed: $e');
+      return false;
     }
   }
 
@@ -97,20 +103,26 @@ class PublishNotifier extends _$PublishNotifier {
 
     state = const Publishing('Updating post...');
 
-    final publishService = ref.read(publishServiceProvider);
-    final result = await publishService.updatePost(
-      config: config,
-      originalPost: originalPost,
-      newBodyContent: newBodyContent,
-    );
+    try {
+      final publishService = ref.read(publishServiceProvider);
+      final result = await publishService.updatePost(
+        config: config,
+        originalPost: originalPost,
+        newBodyContent: newBodyContent,
+      );
 
-    switch (result) {
-      case PublishSuccess(filename: final f, htmlUrl: final url):
-        state = PublishSucceeded(filename: f, htmlUrl: url);
-        return true;
-      case PublishFailure(message: final msg):
-        state = PublishFailed(msg);
-        return false;
+      switch (result) {
+        case PublishSuccess(filename: final f, htmlUrl: final url):
+          state = PublishSucceeded(filename: f, htmlUrl: url);
+          return true;
+        case PublishFailure(message: final msg):
+          state = PublishFailed(msg);
+          return false;
+      }
+    } catch (e) {
+      // Never let an exception escape to the async zone - surface it
+      state = PublishFailed('Publish failed: $e');
+      return false;
     }
   }
 

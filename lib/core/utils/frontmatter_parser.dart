@@ -17,10 +17,12 @@ class ParsedPost {
 
 /// Parser for Jekyll frontmatter in markdown files
 class FrontmatterParser {
-  // Regex to match YAML frontmatter block
+  // Regex to match YAML frontmatter block.
+  // NOT multiLine, so ^ anchors to the start of the string: content that
+  // merely contains '---' lines later (e.g. horizontal rules) is body, not
+  // front matter.
   static final _frontmatterRegex = RegExp(
-    r'^---\s*\n([\s\S]*?)\n---\s*\n?',
-    multiLine: true,
+    r'^---[^\S\n]*\n([\s\S]*?)\n---[^\S\n]*(\n|$)',
   );
 
   // Regex to extract key-value pairs from YAML
@@ -32,34 +34,58 @@ class FrontmatterParser {
   /// Parse a Jekyll markdown file content
   /// Extracts frontmatter and body content
   static ParsedPost parse(String content) {
+    // Strip UTF-8 BOM if present so front matter at the file start is found
+    if (content.startsWith('\uFEFF')) {
+      content = content.substring(1);
+    }
+
     final match = _frontmatterRegex.firstMatch(content);
-    
+
     if (match == null) {
       // No frontmatter found, treat entire content as body
+      final body = content.trim();
+      final headingMatch =
+          RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(body);
       return ParsedPost(
-        title: 'Untitled',
+        title: headingMatch?.group(1)?.trim() ?? 'Untitled',
         date: DateTime.now().toIso8601String().split('T').first,
         rawFrontmatter: '',
-        bodyContent: content.trim(),
+        bodyContent: body,
       );
     }
 
     final rawFrontmatter = match.group(1) ?? '';
     final bodyContent = content.substring(match.end).trim();
-    
-    // Parse YAML fields
+
+    // Parse YAML fields (never throw on malformed lines - skip them)
     final fields = <String, String>{};
     for (final fieldMatch in _yamlFieldRegex.allMatches(rawFrontmatter)) {
-      final key = fieldMatch.group(1)?.toLowerCase() ?? '';
-      var value = fieldMatch.group(2)?.trim() ?? '';
-      
-      // Remove surrounding quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.substring(1, value.length - 1);
+      try {
+        final key = fieldMatch.group(1)?.toLowerCase() ?? '';
+        var value = fieldMatch.group(2)?.trim() ?? '';
+
+        // Remove surrounding quotes if present (length check guards against
+        // a value that is a single quote character)
+        if (value.length >= 2 &&
+            value.startsWith('"') &&
+            value.endsWith('"')) {
+          value = value.substring(1, value.length - 1);
+          // Unescape backslash escapes inside double-quoted scalars
+          value = value.replaceAllMapped(
+            RegExp(r'\\(.)'),
+            (m) => m.group(1)!,
+          );
+        } else if (value.length >= 2 &&
+            value.startsWith("'") &&
+            value.endsWith("'")) {
+          value = value.substring(1, value.length - 1);
+        }
+
+        fields[key] = value;
+      } catch (_) {
+        // Skip malformed lines rather than failing the whole parse
+        continue;
       }
-      
-      fields[key] = value;
     }
 
     // Extract title - try multiple common field names
@@ -91,19 +117,27 @@ class FrontmatterParser {
     );
   }
 
-  /// Generate frontmatter YAML from fields
+  /// Generate frontmatter YAML from fields.
+  /// Emits minimal front matter by default: only title + date.
+  /// [layout] is omitted when null; [categories] is omitted when empty
+  /// (kept as optional params for a future front-matter template feature).
   static String generateFrontmatter({
     required String title,
     required String date,
-    String layout = 'single',
-    List<String> categories = const ['blog'],
+    String? layout,
+    List<String> categories = const [],
     Map<String, String>? extraFields,
   }) {
+    // Double-quoted YAML scalar: escape backslashes first, then quotes
+    final escapedTitle =
+        title.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
     final buffer = StringBuffer();
     buffer.writeln('---');
-    buffer.writeln('title: "$title"');
+    buffer.writeln('title: "$escapedTitle"');
     buffer.writeln('date: $date');
-    buffer.writeln('layout: $layout');
+    if (layout != null) {
+      buffer.writeln('layout: $layout');
+    }
     if (categories.isNotEmpty) {
       buffer.writeln('categories: [${categories.join(', ')}]');
     }

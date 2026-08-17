@@ -65,14 +65,16 @@ final localImageMapBoxProvider = AutoDisposeProvider<Box<String>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef LocalImageMapBoxRef = AutoDisposeProviderRef<Box<String>>;
-String _$imageManagerHash() => r'0ccc515f7fc1a5c73e659089f5c6354420979806';
+String _$imageManagerHash() => r'1fe6606f06ce8c004ebdd3a74c6550367492c816';
 
 /// Notifier for managing image operations
+/// keepAlive so upload statuses survive while the editor preview
+/// subscribes/unsubscribes (overlays keep updating mid-upload)
 ///
 /// Copied from [ImageManager].
 @ProviderFor(ImageManager)
-final imageManagerProvider = AutoDisposeNotifierProvider<ImageManager,
-    Map<String, ImageUploadStatus>>.internal(
+final imageManagerProvider =
+    NotifierProvider<ImageManager, Map<String, ImageUploadStatus>>.internal(
   ImageManager.new,
   name: r'imageManagerProvider',
   debugGetCreateSourceHash:
@@ -81,7 +83,7 @@ final imageManagerProvider = AutoDisposeNotifierProvider<ImageManager,
   allTransitiveDependencies: null,
 );
 
-typedef _$ImageManager = AutoDisposeNotifier<Map<String, ImageUploadStatus>>;
+typedef _$ImageManager = Notifier<Map<String, ImageUploadStatus>>;
 String _$imageResolverHash() => r'226a42037bce7070f4316fcd21820a79bbf8d9d8';
 
 /// Provider to resolve image paths for preview

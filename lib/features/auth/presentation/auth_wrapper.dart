@@ -22,6 +22,8 @@ class AuthWrapper extends ConsumerWidget {
       AuthLoading() => const _SplashScreen(),
       AuthUnauthenticated() => const LoginScreen(),
       AuthAuthenticated() => _handleAuthenticatedState(configState),
+      // Offline launch with a stored token: proceed with cached data
+      AuthOfflineAuthenticated() => _handleAuthenticatedState(configState),
     };
   }
 

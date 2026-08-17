@@ -120,7 +120,38 @@ class GitHubUploadService {
     }
   }
 
-  /// Upload a markdown post file
+  /// Check whether a post file already exists in _posts on the configured
+  /// branch. Returns true when taken, false when free (404).
+  /// Throws on auth/network errors.
+  Future<bool> postExists({
+    required AppConfig config,
+    required String filename,
+  }) async {
+    final token = await _secureStorage.getToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    try {
+      final response = await _dio.get(
+        '/repos/${config.repoOwner}/${config.repoName}/contents/_posts/$filename',
+        queryParameters: {'ref': config.branch},
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return false;
+      }
+      rethrow;
+    }
+  }
+
+  /// Upload a markdown post file.
+  /// On a stale-sha conflict for an update (409, or 422 sha mismatch),
+  /// re-fetches the file's current sha once and retries the PUT once.
   Future<UploadResult> uploadPost({
     required AppConfig config,
     required String filename,
@@ -133,42 +164,121 @@ class GitHubUploadService {
       return const UploadFailure('Not authenticated');
     }
 
-    try {
-      final base64Content = base64Encode(utf8.encode(content));
-      final filePath = '_posts/$filename';
+    final base64Content = base64Encode(utf8.encode(content));
+    final filePath = '_posts/$filename';
 
+    Map<String, dynamic> buildBody(String? sha) {
       final body = <String, dynamic>{
         'message': commitMessage ?? (existingSha != null ? 'Update: $filename' : 'Create: $filename'),
         'content': base64Content,
         'branch': config.branch,
       };
+      if (sha != null) {
+        body['sha'] = sha;
+      }
+      return body;
+    }
 
-      if (existingSha != null) {
-        body['sha'] = existingSha;
+    try {
+      return await _putFile(
+        token: token,
+        config: config,
+        filePath: filePath,
+        body: buildBody(existingSha),
+      );
+    } on DioException catch (e) {
+      final statusCode = e.response?.statusCode;
+      final ghMessage = _extractGitHubMessage(e);
+      final isShaConflict = existingSha != null &&
+          (statusCode == 409 ||
+              (statusCode == 422 && ghMessage.toLowerCase().contains('sha')));
+
+      if (!isShaConflict) {
+        return _handleDioError(e);
       }
 
-      final response = await _dio.put(
+      // Stale sha: re-fetch the current sha once and retry the PUT once
+      const staleMessage =
+          'This post changed on GitHub since it was loaded. Pull to refresh and retry.';
+      final freshSha = await _fetchCurrentSha(
+        token: token,
+        config: config,
+        filePath: filePath,
+      );
+      if (freshSha == null) {
+        return const UploadFailure(staleMessage);
+      }
+      try {
+        return await _putFile(
+          token: token,
+          config: config,
+          filePath: filePath,
+          body: buildBody(freshSha),
+        );
+      } on DioException {
+        return const UploadFailure(staleMessage);
+      }
+    } catch (e) {
+      return UploadFailure('Upload failed: $e');
+    }
+  }
+
+  /// PUT a file to the contents API. Throws DioException on HTTP errors.
+  Future<UploadResult> _putFile({
+    required String token,
+    required AppConfig config,
+    required String filePath,
+    required Map<String, dynamic> body,
+  }) async {
+    final response = await _dio.put(
+      '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
+      data: body,
+      options: Options(
+        headers: {'Authorization': 'Bearer $token'},
+      ),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final responseContent = response.data['content'];
+      return UploadSuccess(
+        sha: responseContent['sha'] as String,
+        htmlUrl: responseContent['html_url'] as String,
+      );
+    }
+
+    return const UploadFailure('Unexpected response from GitHub');
+  }
+
+  /// Fetch the current sha of a file, or null if it cannot be read
+  Future<String?> _fetchCurrentSha({
+    required String token,
+    required AppConfig config,
+    required String filePath,
+  }) async {
+    try {
+      final response = await _dio.get(
         '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
-        data: body,
+        queryParameters: {'ref': config.branch},
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
         ),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseContent = response.data['content'];
-        return UploadSuccess(
-          sha: responseContent['sha'] as String,
-          htmlUrl: responseContent['html_url'] as String,
-        );
+      if (response.statusCode == 200) {
+        return response.data['sha'] as String?;
       }
-
-      return const UploadFailure('Unexpected response from GitHub');
-    } on DioException catch (e) {
-      return _handleDioError(e);
-    } catch (e) {
-      return UploadFailure('Upload failed: $e');
+    } on DioException {
+      return null;
     }
+    return null;
+  }
+
+  /// Safely extract GitHub's error message from a Dio error response
+  String _extractGitHubMessage(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['message'] is String) {
+      return data['message'] as String;
+    }
+    return '';
   }
 
   UploadFailure _handleDioError(DioException e) {
@@ -179,11 +289,16 @@ class GitHubUploadService {
         return const UploadFailure('Upload timed out. Please try again.');
       case DioExceptionType.badResponse:
         final statusCode = e.response?.statusCode;
-        final message = e.response?.data?['message'] ?? 'Unknown error';
+        final ghMessage = _extractGitHubMessage(e);
+        final message = ghMessage.isNotEmpty ? ghMessage : 'Unknown error';
         if (statusCode == 401) {
           return const UploadFailure('Authentication failed');
         } else if (statusCode == 403) {
-          return const UploadFailure('Permission denied');
+          // Include GitHub's message so rate-limit errors are distinguishable
+          return UploadFailure('Permission denied: $message');
+        } else if (statusCode == 409) {
+          return UploadFailure(
+              'Conflict: $message. Pull to refresh and retry.');
         } else if (statusCode == 422) {
           return UploadFailure('Invalid request: $message');
         }

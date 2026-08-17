@@ -40,11 +40,15 @@ class PostsLoaded extends PostsState {
   final List<BlogPost> posts;
   final bool isRefreshing;
   final DateTime? lastSynced;
-  
+
+  /// Non-null when the last refresh failed but cached posts are shown
+  final String? syncError;
+
   const PostsLoaded({
     required this.posts,
     this.isRefreshing = false,
     this.lastSynced,
+    this.syncError,
   });
 }
 
@@ -58,11 +62,39 @@ class PostsError extends PostsState {
 /// Notifier for managing posts with offline-first logic
 @riverpod
 class PostsNotifier extends _$PostsNotifier {
+  /// In-flight guard so overlapping refresh() calls (build + pull-to-refresh
+  /// + post-publish) don't interleave cache writes
+  bool _isRefreshing = false;
+
   @override
   PostsState build() {
-    // Load from cache first, then refresh
-    _loadFromCacheAndRefresh();
-    return const PostsInitial();
+    // Read the cache synchronously and return it directly - state writes
+    // inside build()'s prelude are discarded by Riverpod (the return value
+    // wins), so the cached posts must BE the return value.
+    List<BlogPost> cachedPosts;
+    try {
+      cachedPosts = _loadFromCache();
+    } catch (_) {
+      cachedPosts = const [];
+    }
+
+    // Background refresh from API
+    Future.microtask(() async {
+      try {
+        await refresh();
+      } catch (_) {
+        // Provider was disposed before/while the initial refresh ran
+      }
+    });
+
+    if (cachedPosts.isEmpty) {
+      return const PostsInitial();
+    }
+    return PostsLoaded(
+      posts: cachedPosts,
+      isRefreshing: true,
+      lastSynced: _latestSync(cachedPosts),
+    );
   }
 
   /// Get current config
@@ -80,38 +112,48 @@ class PostsNotifier extends _$PostsNotifier {
     return posts;
   }
 
-  /// Save posts to Hive cache
-  Future<void> _saveToCache(List<BlogPost> posts) async {
-    final box = ref.read(postsBoxProvider);
-    await box.clear();
+  /// Latest successful sync time recorded across cached posts
+  /// (persisted per-post in the Hive box, so it survives restarts)
+  DateTime? _latestSync(List<BlogPost> posts) {
+    DateTime? latest;
     for (final post in posts) {
-      if (post.fileName != null) {
-        await box.put(post.fileName, post);
+      final synced = post.lastSynced;
+      if (synced != null && (latest == null || synced.isAfter(latest))) {
+        latest = synced;
       }
     }
+    return latest;
   }
 
-  /// Load from cache first, then background refresh
-  Future<void> _loadFromCacheAndRefresh() async {
-    final cachedPosts = _loadFromCache();
-    
-    if (cachedPosts.isNotEmpty) {
-      // Show cached data immediately
-      state = PostsLoaded(
-        posts: cachedPosts,
-        isRefreshing: true,
-        lastSynced: cachedPosts.first.lastSynced,
-      );
-    } else {
-      state = const PostsLoading();
+  /// Save posts to Hive cache, stamping each with the sync time.
+  /// Entries are built first, then written with clear + putAll in one
+  /// sequence to minimize the window for a partial cache.
+  Future<void> _saveToCache(List<BlogPost> posts, DateTime syncTime) async {
+    final box = ref.read(postsBoxProvider);
+    final entries = <String, BlogPost>{};
+    for (final post in posts) {
+      if (post.fileName != null) {
+        post.lastSynced = syncTime;
+        entries[post.fileName!] = post;
+      }
     }
-
-    // Background refresh from API
-    await refresh();
+    await box.clear();
+    await box.putAll(entries);
   }
 
-  /// Refresh posts from GitHub API
+  /// Refresh posts from GitHub API. Concurrent calls coalesce into the
+  /// already-running refresh.
   Future<void> refresh() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    try {
+      await _doRefresh();
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  Future<void> _doRefresh() async {
     final config = _config;
     if (config == null) {
       state = const PostsError('No repository configured');
@@ -130,13 +172,13 @@ class PostsNotifier extends _$PostsNotifier {
       state = PostsLoaded(
         posts: currentPosts,
         isRefreshing: true,
-        lastSynced: currentPosts.isNotEmpty ? currentPosts.first.lastSynced : null,
+        lastSynced: _latestSync(currentPosts),
       );
     }
 
     try {
       final contentService = ref.read(contentServiceProvider);
-      
+
       // Create map of existing posts for SHA comparison
       final existingMap = {
         for (var p in currentPosts)
@@ -155,25 +197,34 @@ class PostsNotifier extends _$PostsNotifier {
       allPosts.sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
       // Save to cache
-      await _saveToCache(allPosts);
+      final syncTime = DateTime.now();
+      await _saveToCache(allPosts, syncTime);
 
       state = PostsLoaded(
         posts: allPosts,
         isRefreshing: false,
-        lastSynced: DateTime.now(),
+        lastSynced: syncTime,
       );
     } catch (e) {
-      // On error, keep showing cached data
+      // On error, keep showing cached data but surface the failure
       if (currentPosts.isNotEmpty) {
         state = PostsLoaded(
           posts: currentPosts,
           isRefreshing: false,
-          lastSynced: currentPosts.first.lastSynced,
+          lastSynced: _latestSync(currentPosts),
+          syncError: e.toString(),
         );
       } else {
         state = PostsError(e.toString(), currentPosts);
       }
     }
+  }
+
+  /// Clear all cached posts (used on logout / repository change)
+  Future<void> clearAll() async {
+    final box = ref.read(postsBoxProvider);
+    await box.clear();
+    state = const PostsInitial();
   }
 
   /// Add a new local draft

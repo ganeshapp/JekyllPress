@@ -29,12 +29,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   late TextEditingController _titleController;
   late TextEditingController _bodyController;
   final FocusNode _bodyFocusNode = FocusNode();
+  final ScrollController _bodyScrollController = ScrollController();
+  final UndoHistoryController _undoController = UndoHistoryController();
 
-  bool get isNewPost => widget.post == null && 
+  bool get isNewPost => widget.post == null &&
       (widget.resumeDraft == null || !widget.resumeDraft!.isEditingExisting);
   bool _isInitialized = false;
   bool _isPickingImage = false;
-  
+
+  // Last text pushed to the provider. TextEditingController notifies on
+  // selection-only changes too - those must not rebuild or autosave.
+  String _lastPushedTitle = '';
+  String _lastPushedBody = '';
+
   // Auto-save debounce timer
   Timer? _autoSaveTimer;
   static const _autoSaveDelay = Duration(seconds: 2);
@@ -47,7 +54,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _bodyController = TextEditingController();
 
     _tabController.addListener(_onTabChanged);
-    
+
     // Register lifecycle observer for saving on background
     WidgetsBinding.instance.addObserver(this);
   }
@@ -57,7 +64,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     super.didChangeDependencies();
     if (!_isInitialized) {
       _isInitialized = true;
-      
+
       // Set up text controller values immediately (no provider modification)
       if (widget.resumeDraft != null) {
         // Resuming a draft - use draft content
@@ -68,11 +75,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         _titleController.text = widget.post!.title;
         _bodyController.text = widget.post!.bodyContent;
       }
-      
+
+      // Loaded content matches what the provider gets initialized with
+      _lastPushedTitle = _titleController.text;
+      _lastPushedBody = _bodyController.text;
+
       // Add listeners
       _titleController.addListener(_onTitleChanged);
       _bodyController.addListener(_onBodyChanged);
-      
+
       // Delay provider modification until after build completes
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initializeEditorProvider();
@@ -83,18 +94,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   void _initializeEditorProvider() {
     if (!mounted) return;
-    
+
     final controller = ref.read(editorControllerProvider.notifier);
 
-    if (widget.resumeDraft != null && widget.resumeDraft!.isEditingExisting) {
-      // Resuming a draft that was editing an existing post
-      controller.initializeWithPost(widget.post!);
-    } else if (widget.resumeDraft != null) {
-      // Resuming a draft for a new post - initialize as new
-      controller.initializeNewPost();
-      // Update with draft content
-      controller.updateTitle(widget.resumeDraft!.title);
-      controller.updateBody(widget.resumeDraft!.bodyContent);
+    if (widget.resumeDraft != null) {
+      // Resuming a draft - the draft content is the baseline, so an
+      // untouched resumed draft doesn't show as "Editing"
+      controller.initializeWithDraft(
+        title: widget.resumeDraft!.title,
+        bodyContent: widget.resumeDraft!.bodyContent,
+        originalPost: widget.resumeDraft!.isEditingExisting ? widget.post : null,
+      );
     } else if (widget.post != null) {
       controller.initializeWithPost(widget.post!);
     } else {
@@ -104,9 +114,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   void _initializeDraftProvider() {
     if (!mounted) return;
-    
+
     final draftNotifier = ref.read(currentDraftNotifierProvider.notifier);
-    
+
     if (widget.resumeDraft != null) {
       // Resuming an existing draft
       draftNotifier.initializeWithDraft(widget.resumeDraft!);
@@ -118,31 +128,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       draftNotifier.initializeNewDraft();
     }
   }
-  
+
   /// Handle app lifecycle changes - save on background
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
-    if (state == AppLifecycleState.paused || 
+
+    if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
       // App is going to background - save immediately
       _saveImmediately();
     }
   }
-  
-  /// Save draft immediately (bypasses debounce)
-  Future<void> _saveImmediately() async {
+
+  /// Save draft immediately (bypasses debounce).
+  /// Returns true when the draft was actually persisted.
+  Future<bool> _saveImmediately() async {
     _autoSaveTimer?.cancel();
-    
+
     final draftNotifier = ref.read(currentDraftNotifierProvider.notifier);
-    await draftNotifier.forceSave(
+    return draftNotifier.forceSave(
       title: _titleController.text,
       bodyContent: _bodyController.text,
     );
   }
-  
+
   /// Trigger debounced auto-save
   void _triggerAutoSave() {
     _autoSaveTimer?.cancel();
@@ -158,12 +169,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   void _onTitleChanged() {
-    ref.read(editorControllerProvider.notifier).updateTitle(_titleController.text);
+    final text = _titleController.text;
+    if (text == _lastPushedTitle) return;
+    _lastPushedTitle = text;
+    ref.read(editorControllerProvider.notifier).updateTitle(text);
     _triggerAutoSave();
   }
 
   void _onBodyChanged() {
-    ref.read(editorControllerProvider.notifier).updateBody(_bodyController.text);
+    final text = _bodyController.text;
+    if (text == _lastPushedBody) return;
+    _lastPushedBody = text;
+    ref.read(editorControllerProvider.notifier).updateBody(text);
     _triggerAutoSave();
   }
 
@@ -172,17 +189,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (_tabController.index == 1) {
       FocusScope.of(context).unfocus();
     }
-    setState(() {});
   }
 
   @override
   void dispose() {
     // Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
-    
+
     // Cancel auto-save timer
     _autoSaveTimer?.cancel();
-    
+
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _titleController.removeListener(_onTitleChanged);
@@ -190,6 +206,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _titleController.dispose();
     _bodyController.dispose();
     _bodyFocusNode.dispose();
+    _bodyScrollController.dispose();
+    _undoController.dispose();
     super.dispose();
   }
 
@@ -197,30 +215,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   Future<void> _handleBack() async {
     // Cancel any pending auto-save
     _autoSaveTimer?.cancel();
-    
+
     // Save current state to drafts before closing
-    await _saveImmediately();
-    
+    final saved = await _saveImmediately();
+
     // Clear editor state
     ref.read(editorControllerProvider.notifier).clear();
     ref.read(currentDraftNotifierProvider.notifier).clear();
-    
+
     if (mounted) {
-      // Show a subtle confirmation
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.save_rounded, color: Color(0xFF81C784), size: 18),
-              SizedBox(width: 12),
-              Text('Draft saved'),
-            ],
+      // Only claim a save when the draft was actually persisted
+      if (saved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.save_rounded, color: Color(0xFF81C784), size: 18),
+                SizedBox(width: 12),
+                Text('Draft saved'),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 1),
+            backgroundColor: Color(0xFF1A2F23),
           ),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 1),
-          backgroundColor: Color(0xFF1A2F23),
-        ),
-      );
+        );
+      }
       Navigator.of(context).pop();
     }
   }
@@ -228,9 +248,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   bool _isPublishing = false;
 
   Future<void> _handleSave() async {
-    final editorState = ref.read(editorControllerProvider);
+    // Cancel pending auto-save so it can't race the publish
+    _autoSaveTimer?.cancel();
 
-    if (editorState.title.trim().isEmpty) {
+    // Read directly from the controllers - they are the source of truth
+    final title = _titleController.text;
+    final bodyContent = _bodyController.text;
+
+    if (title.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a title'),
@@ -252,14 +277,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       if (isNewPost) {
         // Create new post
         success = await publishNotifier.publishNewPost(
-          title: editorState.title,
-          bodyContent: editorState.bodyContent,
+          title: title,
+          bodyContent: bodyContent,
         );
       } else {
         // Update existing post
         success = await publishNotifier.publishUpdate(
           originalPost: widget.post!,
-          newBodyContent: editorState.bodyContent,
+          newBodyContent: bodyContent,
         );
       }
 
@@ -267,7 +292,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         // Clear editor state and delete draft
         ref.read(editorControllerProvider.notifier).clear();
         await ref.read(currentDraftNotifierProvider.notifier).clearAfterPublish();
-        
+        if (!mounted) return;
+
         // Refresh posts list and drafts
         ref.read(postsNotifierProvider.notifier).refresh();
         ref.read(draftsNotifierProvider.notifier).refresh();
@@ -276,7 +302,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         final publishState = ref.read(publishNotifierProvider);
         String message = 'Post published successfully!';
         if (publishState is PublishSucceeded) {
-          message = isNewPost 
+          message = isNewPost
               ? 'Post created: ${publishState.filename}'
               : 'Post updated successfully!';
         }
@@ -337,9 +363,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       final filename = await imageManager.pickImage();
 
       if (filename != null && mounted) {
-        // Generate markdown and insert at cursor
+        // Generate markdown and insert at cursor. If the body was never
+        // focused there is no cursor - insert at the end and scroll there.
         final markdown = imageManager.generateMarkdownImage(filename);
+        final hadCursor = _bodyController.selection.isValid;
         _insertTextAtCursor('\n$markdown\n');
+        if (!hadCursor) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _bodyScrollController.hasClients) {
+              _bodyScrollController.jumpTo(
+                _bodyScrollController.position.maxScrollExtent,
+              );
+            }
+          });
+        }
 
         HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -381,30 +418,34 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   void _insertTextAtCursor(String text) {
-    final currentText = _bodyController.text;
-    final selection = _bodyController.selection;
+    final value = _bodyController.value;
+    final selection = value.selection;
 
-    int insertPosition;
-    if (selection.isValid && selection.baseOffset >= 0) {
-      insertPosition = selection.baseOffset;
+    // Replace an active selection instead of splicing into it.
+    // No valid selection (field never focused) means append at the end.
+    final int start;
+    final int end;
+    if (selection.isValid) {
+      start = selection.start;
+      end = selection.end;
     } else {
-      insertPosition = currentText.length;
+      start = value.text.length;
+      end = value.text.length;
     }
 
-    final newText = currentText.substring(0, insertPosition) +
-        text +
-        currentText.substring(insertPosition);
+    final newText = value.text.replaceRange(start, end, text);
 
-    _bodyController.text = newText;
-    _bodyController.selection = TextSelection.collapsed(
-      offset: insertPosition + text.length,
+    // Set text + selection atomically so listeners fire once with a
+    // valid selection
+    _bodyController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + text.length),
     );
+    _bodyFocusNode.requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    final editorState = ref.watch(editorControllerProvider);
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -417,16 +458,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           child: SafeArea(
             child: Column(
               children: [
-                _buildAppBar(editorState),
+                _buildAppBar(),
                 _buildTabBar(),
                 Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _buildWriteTab(editorState),
-                      _buildPreviewTab(editorState),
-                    ],
+                  // IndexedStack keeps both tabs alive so Write scroll
+                  // position, undo history, and Preview scroll survive
+                  // tab switches
+                  child: ListenableBuilder(
+                    listenable: _tabController,
+                    builder: (context, _) {
+                      return IndexedStack(
+                        index: _tabController.index,
+                        children: [
+                          _buildWriteTab(),
+                          _buildPreviewTab(),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -437,9 +485,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
   }
 
-  Widget _buildAppBar(EditorState editorState) {
-    final saveStatus = ref.watch(currentDraftNotifierProvider);
-    
+  Widget _buildAppBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
       child: Row(
@@ -457,8 +503,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
             ),
           ),
-          // Save status indicator
-          _buildSaveStatusIndicator(saveStatus, editorState.hasUnsavedChanges),
+          // Save status indicator - watches providers locally so the
+          // whole screen doesn't rebuild on every status change
+          Consumer(
+            builder: (context, ref, _) {
+              final saveStatus = ref.watch(currentDraftNotifierProvider);
+              final hasUnsavedChanges = ref.watch(
+                editorControllerProvider.select((s) => s.hasUnsavedChanges),
+              );
+              return _buildSaveStatusIndicator(saveStatus, hasUnsavedChanges);
+            },
+          ),
           const SizedBox(width: 12),
           ElevatedButton(
             onPressed: _isPublishing ? null : _handleSave,
@@ -613,8 +668,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
   }
 
-  Widget _buildWriteTab(EditorState editorState) {
-    return SingleChildScrollView(
+  Widget _buildWriteTab() {
+    return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,6 +686,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               controller: _titleController,
               enabled: isNewPost,
               textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+              spellCheckConfiguration: const SpellCheckConfiguration(),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -695,58 +753,63 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             ),
           ],
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // Toolbar row
           _buildToolbar(),
           const SizedBox(height: 8),
 
-          // Body field
-          Container(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height * 0.4,
-            ),
-            decoration: AppTheme.cardGlow,
-            child: TextField(
-              controller: _bodyController,
-              focusNode: _bodyFocusNode,
-              maxLines: null,
-              minLines: 15,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              textCapitalization: TextCapitalization.sentences,
-              style: const TextStyle(
-                fontSize: 15,
-                height: 1.6,
-                fontFamily: 'monospace',
-                color: Color(0xFFF5F5F0),
-              ),
-              decoration: InputDecoration(
-                hintText: 'Start writing your post...\n\nTip: Use Markdown for formatting!',
-                hintStyle: TextStyle(
-                  color: const Color(0xFFA8B5A0).withAlpha(150),
+          // Body field - fills the remaining space and scrolls internally,
+          // so a drag scrolls the editor instead of extending a selection
+          Expanded(
+            child: Container(
+              decoration: AppTheme.cardGlow,
+              child: TextField(
+                controller: _bodyController,
+                focusNode: _bodyFocusNode,
+                scrollController: _bodyScrollController,
+                undoController: _undoController,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                textCapitalization: TextCapitalization.sentences,
+                spellCheckConfiguration: const SpellCheckConfiguration(),
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
                   fontFamily: 'monospace',
+                  color: Color(0xFFF5F5F0),
                 ),
-                filled: true,
-                fillColor: const Color(0xFF162A1E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                decoration: InputDecoration(
+                  hintText: 'Start writing your post...\n\nTip: Use Markdown for formatting!',
+                  hintStyle: TextStyle(
+                    color: const Color(0xFFA8B5A0).withAlpha(150),
+                    fontFamily: 'monospace',
                   ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFE8A87C),
-                    width: 2,
+                  filled: true,
+                  fillColor: const Color(0xFF162A1E),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: const Color(0xFF2D4A3E).withAlpha(80),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFE8A87C),
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.all(18),
                 ),
-                contentPadding: const EdgeInsets.all(18),
               ),
             ),
           ),
@@ -772,18 +835,48 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const Spacer(),
+          // Undo / Redo buttons
+          ValueListenableBuilder<UndoHistoryValue>(
+            valueListenable: _undoController,
+            builder: (context, undoValue, _) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ToolbarButton(
+                    icon: Icons.undo_rounded,
+                    tooltip: 'Undo',
+                    onPressed: undoValue.canUndo ? _undoController.undo : null,
+                  ),
+                  const SizedBox(width: 6),
+                  _ToolbarButton(
+                    icon: Icons.redo_rounded,
+                    tooltip: 'Redo',
+                    onPressed: undoValue.canRedo ? _undoController.redo : null,
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(width: 6),
+          // Keyboard dismiss button
+          _ToolbarButton(
+            icon: Icons.keyboard_hide_rounded,
+            tooltip: 'Hide keyboard',
+            onPressed: () => FocusScope.of(context).unfocus(),
+          ),
+          const SizedBox(width: 6),
           // Add Image button
           _ToolbarButton(
             icon: Icons.image_rounded,
-            label: 'Image',
+            tooltip: 'Add image',
             onPressed: _isPickingImage ? null : _handleAddImage,
             isLoading: _isPickingImage,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           // Markdown help button
           _ToolbarButton(
             icon: Icons.help_outline_rounded,
-            label: 'Help',
+            tooltip: 'Markdown help',
             onPressed: _showMarkdownHelp,
           ),
         ],
@@ -791,209 +884,223 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
   }
 
-  Widget _buildPreviewTab(EditorState editorState) {
-    final hasContent = editorState.bodyContent.trim().isNotEmpty;
+  Widget _buildPreviewTab() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final editorState = ref.watch(editorControllerProvider);
+        final hasContent = editorState.bodyContent.trim().isNotEmpty;
 
-    if (!hasContent) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.article_outlined,
-              size: 64,
-              color: const Color(0xFFA8B5A0).withAlpha(100),
+        if (!hasContent) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.article_outlined,
+                  size: 64,
+                  color: const Color(0xFFA8B5A0).withAlpha(100),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Nothing to preview yet',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: const Color(0xFFA8B5A0),
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Switch to the Write tab and add some content',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Nothing to preview yet',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFFA8B5A0),
+          );
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title preview
+              if (editorState.title.isNotEmpty) ...[
+                Text(
+                  editorState.title,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFF5F5F0),
+                    height: 1.3,
                   ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Switch to the Write tab and add some content',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      );
-    }
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  // Existing posts show their real date; today is only
+                  // for brand-new posts
+                  editorState.originalPost != null
+                      ? _formatPostDate(editorState.originalPost!.date)
+                      : _formatDate(DateTime.now()),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFFA8B5A0),
+                  ),
+                ),
+                const Divider(
+                  height: 32,
+                  color: Color(0xFF2D4A3E),
+                ),
+              ],
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title preview
-          if (editorState.title.isNotEmpty) ...[
-            Text(
-              editorState.title,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFFF5F5F0),
-                height: 1.3,
+              // Markdown content with smart image resolver
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF162A1E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                  ),
+                ),
+                child: MarkdownBody(
+                  data: editorState.bodyContent,
+                  selectable: true,
+                  styleSheet: _buildMarkdownStyleSheet(),
+                  sizedImageBuilder: (config) => _buildImage(config.uri, config.title, config.alt),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _formatDate(DateTime.now()),
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFFA8B5A0),
-              ),
-            ),
-            const Divider(
-              height: 32,
-              color: Color(0xFF2D4A3E),
-            ),
-          ],
-
-          // Markdown content with smart image resolver
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF162A1E),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFF2D4A3E).withAlpha(80),
-              ),
-            ),
-            child: MarkdownBody(
-              data: editorState.bodyContent,
-              selectable: true,
-              styleSheet: _buildMarkdownStyleSheet(),
-              sizedImageBuilder: (config) => _buildImage(config.uri, config.title, config.alt),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   /// Smart image resolver - checks local cache first, falls back to GitHub
   Widget _buildImage(Uri uri, String? title, String? alt) {
-    final imageResolver = ref.read(imageResolverProvider.notifier);
-    final imageManager = ref.read(imageManagerProvider.notifier);
-    
     final path = uri.toString();
-    final (isLocal, resolvedPath) = imageResolver.resolveImagePath(path);
-    
-    // Get upload status for this image
     final filename = path.split('/').last;
-    final uploadStatus = imageManager.getStatus(filename);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: isLocal
-                ? Image.file(
-                    File(resolvedPath),
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _buildImageError(alt ?? 'Image'),
-                  )
-                : Image.network(
-                    resolvedPath,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return _buildImageLoading();
-                    },
-                    errorBuilder: (context, error, stackTrace) =>
-                        _buildImageError(alt ?? 'Image'),
+    return Consumer(
+      builder: (context, ref, _) {
+        final imageResolver = ref.read(imageResolverProvider.notifier);
+        final imageManager = ref.read(imageManagerProvider.notifier);
+
+        final (isLocal, resolvedPath) = imageResolver.resolveImagePath(path);
+
+        // Watch upload state so overlays update as uploads progress
+        final uploadStatus = ref.watch(imageManagerProvider)[filename];
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: isLocal
+                    ? Image.file(
+                        File(resolvedPath),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildImageError(alt ?? 'Image'),
+                      )
+                    : Image.network(
+                        resolvedPath,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return _buildImageLoading();
+                        },
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildImageError(alt ?? 'Image'),
+                      ),
+              ),
+              // Upload status overlay
+              if (uploadStatus != null && uploadStatus.isUploading)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFFE8A87C),
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Uploading...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                ),
+              // Upload error overlay
+              if (uploadStatus != null && uploadStatus.error != null)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE57373),
+                      borderRadius: BorderRadius.vertical(
+                        bottom: Radius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Upload failed',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => imageManager.retryUpload(filename),
+                          child: const Text(
+                            'Retry',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
-          // Upload status overlay
-          if (uploadStatus != null && uploadStatus.isUploading)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFFE8A87C),
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Uploading...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          // Upload error overlay
-          if (uploadStatus != null && uploadStatus.error != null)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE57373),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(12),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.error_outline_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Upload failed',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => imageManager.retryUpload(filename),
-                      child: const Text(
-                        'Retry',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1221,6 +1328,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
   }
 
+  /// Format a post's date string (YYYY-MM-DD, possibly with a time suffix)
+  String _formatPostDate(String date) {
+    DateTime? parsed = DateTime.tryParse(date);
+    parsed ??= date.length >= 10 ? DateTime.tryParse(date.substring(0, 10)) : null;
+    return parsed != null ? _formatDate(parsed) : date;
+  }
+
   String _formatDate(DateTime date) {
     final months = [
       'January', 'February', 'March', 'April', 'May', 'June',
@@ -1233,20 +1347,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 /// Toolbar button widget
 class _ToolbarButton extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String? tooltip;
   final VoidCallback? onPressed;
   final bool isLoading;
 
   const _ToolbarButton({
     required this.icon,
-    required this.label,
+    this.tooltip,
     this.onPressed,
     this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final isDisabled = onPressed == null && !isLoading;
+
+    final button = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
@@ -1257,11 +1373,8 @@ class _ToolbarButton extends StatelessWidget {
             color: const Color(0xFF2D4A3E).withAlpha(60),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isLoading)
-                const SizedBox(
+          child: isLoading
+              ? const SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
@@ -1269,24 +1382,20 @@ class _ToolbarButton extends StatelessWidget {
                     color: Color(0xFFE8A87C),
                   ),
                 )
-              else
-                Icon(
+              : Icon(
                   icon,
                   size: 16,
-                  color: const Color(0xFFE8A87C),
+                  color: isDisabled
+                      ? const Color(0xFFA8B5A0).withAlpha(90)
+                      : const Color(0xFFE8A87C),
                 ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFA8B5A0),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip!, child: button);
+    }
+    return button;
   }
 }

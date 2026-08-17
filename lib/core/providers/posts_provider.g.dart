@@ -43,7 +43,7 @@ final postsBoxProvider = AutoDisposeProvider<Box<BlogPost>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PostsBoxRef = AutoDisposeProviderRef<Box<BlogPost>>;
-String _$postsNotifierHash() => r'b947a4acb2c1b8be49d44fc33a84928afea3ef46';
+String _$postsNotifierHash() => r'a63a5a7f4aeb9b6485ab6ff1209c00e3169e97b5';
 
 /// Notifier for managing posts with offline-first logic
 ///

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import '../models/github_user.dart';
 import 'secure_storage_service.dart';
@@ -15,6 +17,12 @@ class AuthSuccess extends AuthResult {
 class AuthFailure extends AuthResult {
   final String message;
   const AuthFailure(this.message);
+}
+
+/// A stored token exists but GitHub could not be reached to validate it.
+/// The user should stay authenticated and work against cached data.
+class AuthOffline extends AuthResult {
+  const AuthOffline();
 }
 
 /// Service for handling GitHub authentication
@@ -69,12 +77,65 @@ class AuthService {
   }
 
   /// Check if user is already authenticated
+  ///
+  /// Unlike [validateToken], a network/connection failure here does NOT
+  /// invalidate the session: the stored token is trusted and [AuthOffline]
+  /// is returned so the app can proceed with cached data. Only a real 401
+  /// response (revoked/expired token) or a missing token returns
+  /// [AuthFailure].
   Future<AuthResult> checkExistingAuth() async {
     final token = await _secureStorage.getToken();
     if (token == null || token.isEmpty) {
       return const AuthFailure('No token stored');
     }
-    return validateToken(token);
+
+    try {
+      final response = await _dio.get(
+        '/user',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer ${token.trim()}',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        return AuthSuccess(GitHubUser.fromJson(response.data));
+      }
+      // Unexpected but non-401 response: keep the session, work offline
+      return const AuthOffline();
+    } on DioException catch (e) {
+      // Only a definitive 401 means the token was revoked or expired
+      if (e.type == DioExceptionType.badResponse &&
+          e.response?.statusCode == 401) {
+        return const AuthFailure('Invalid or expired token');
+      }
+      // Network/connection errors (airplane mode, flaky data, GitHub
+      // outage, rate limiting) with a stored token: stay authenticated
+      if (_isNetworkError(e)) {
+        return const AuthOffline();
+      }
+      // Other transient errors (403 rate limit, 5xx, cancel): don't log
+      // the user out over them either
+      return const AuthOffline();
+    } catch (e) {
+      return AuthFailure('Unexpected error: ${e.toString()}');
+    }
+  }
+
+  /// True when the error indicates the network/GitHub was unreachable
+  bool _isNetworkError(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return true;
+      case DioExceptionType.unknown:
+        return e.error is SocketException;
+      default:
+        return false;
+    }
   }
 
   /// Logout - clear stored token

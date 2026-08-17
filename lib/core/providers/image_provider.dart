@@ -60,7 +60,9 @@ class ImageUploadStatus {
 }
 
 /// Notifier for managing image operations
-@riverpod
+/// keepAlive so upload statuses survive while the editor preview
+/// subscribes/unsubscribes (overlays keep updating mid-upload)
+@Riverpod(keepAlive: true)
 class ImageManager extends _$ImageManager {
   @override
   Map<String, ImageUploadStatus> build() {

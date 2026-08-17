@@ -37,6 +37,12 @@ class AuthAuthenticated extends AuthState {
   const AuthAuthenticated(this.user);
 }
 
+/// A stored token exists but GitHub is unreachable (offline launch,
+/// flaky network, GitHub outage). The user proceeds with cached data.
+class AuthOfflineAuthenticated extends AuthState {
+  const AuthOfflineAuthenticated();
+}
+
 class AuthUnauthenticated extends AuthState {
   final String? message;
   const AuthUnauthenticated([this.message]);
@@ -47,18 +53,26 @@ class AuthUnauthenticated extends AuthState {
 class AuthNotifier extends _$AuthNotifier {
   @override
   AuthState build() {
-    // Check for existing auth on startup
-    _checkExistingAuth();
-    return const AuthInitial();
+    // Check for existing auth on startup. Scheduled as a microtask so the
+    // state writes aren't clobbered by build()'s own return value.
+    Future.microtask(() async {
+      try {
+        await _checkExistingAuth();
+      } catch (_) {
+        // Provider was disposed before the check completed
+      }
+    });
+    return const AuthLoading();
   }
 
   Future<void> _checkExistingAuth() async {
-    state = const AuthLoading();
     final authService = ref.read(authServiceProvider);
     final result = await authService.checkExistingAuth();
-    
+
     state = switch (result) {
       AuthSuccess(user: final user) => AuthAuthenticated(user),
+      // Stored token but GitHub unreachable: stay in, use cached data
+      AuthOffline() => const AuthOfflineAuthenticated(),
       AuthFailure() => const AuthUnauthenticated(),
     };
   }
@@ -67,11 +81,15 @@ class AuthNotifier extends _$AuthNotifier {
     state = const AuthLoading();
     final authService = ref.read(authServiceProvider);
     final result = await authService.validateToken(token);
-    
+
     switch (result) {
       case AuthSuccess(user: final user):
         state = AuthAuthenticated(user);
         return true;
+      case AuthOffline():
+        // validateToken never returns this, but handle it defensively
+        state = const AuthUnauthenticated('No internet connection');
+        return false;
       case AuthFailure(message: final message):
         state = AuthUnauthenticated(message);
         return false;
