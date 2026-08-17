@@ -14,6 +14,10 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          # Pinned to the SDK the app is developed and released with. hive_generator
+          # and riverpod_generator cannot co-resolve on newer SDKs (the _macros
+          # package they transitively need was removed), so `stable` breaks the build.
+          flutter-version: 3.29.3
           channel: stable
           cache: true
 
