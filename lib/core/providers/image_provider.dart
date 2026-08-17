@@ -180,16 +180,39 @@ class ImageManager extends _$ImageManager {
     return box.get(filename);
   }
 
-  /// Generate markdown image syntax
+  /// Generate markdown image syntax. The URL is root-relative and
+  /// baseurl-aware: '/assets/images/x.jpg' on a root site,
+  /// '/myrepo/assets/images/x.jpg' on a project site.
   String generateMarkdownImage(String filename, {String alt = 'image'}) {
     final config = _config;
     final assetsPath = config?.assetsPath ?? 'assets/images';
+    final baseurl = normalizeBaseurl(config?.baseurl ?? '');
     // Clean path
     final cleanPath = assetsPath
         .replaceAll(RegExp(r'^/+'), '')
         .replaceAll(RegExp(r'/+$'), '');
-    return '![$alt](/$cleanPath/$filename)';
+    return '![$alt]($baseurl/$cleanPath/$filename)';
   }
+}
+
+/// Normalize a configured baseurl to '' or '/segment[/…]' (leading slash,
+/// no trailing slash), the shape Jekyll expects
+String normalizeBaseurl(String baseurl) {
+  var cleaned = baseurl.trim().replaceAll(RegExp(r'/+$'), '');
+  if (cleaned.isEmpty || cleaned == '/') return '';
+  if (!cleaned.startsWith('/')) cleaned = '/$cleaned';
+  return cleaned;
+}
+
+/// Strip the site [baseurl] prefix from a root-relative markdown [path]
+/// so it maps back to a repo-relative file path. '/myrepo/assets/x.jpg'
+/// with baseurl '/myrepo' -> '/assets/x.jpg'; no-op when baseurl is ''.
+String stripBaseurl(String path, String baseurl) {
+  final prefix = normalizeBaseurl(baseurl);
+  if (prefix.isEmpty) return path;
+  if (path == prefix) return '/';
+  if (path.startsWith('$prefix/')) return path.substring(prefix.length);
+  return path;
 }
 
 /// Provider to resolve image paths for preview
@@ -218,16 +241,17 @@ class ImageResolver extends _$ImageResolver {
     final configState = ref.read(configNotifierProvider);
     if (configState is ConfigLoaded) {
       final config = configState.config;
-      
-      // Handle relative paths
-      String cleanPath = markdownPath;
+
+      // Site URLs carry the baseurl prefix on project sites - strip it
+      // before mapping to a repo-relative path
+      String cleanPath = stripBaseurl(markdownPath, config.baseurl);
       if (cleanPath.startsWith('/')) {
         cleanPath = cleanPath.substring(1);
       }
-      
+
       final rawUrl = 'https://raw.githubusercontent.com/'
           '${config.repoOwner}/${config.repoName}/${config.branch}/$cleanPath';
-      
+
       return (false, rawUrl);
     }
 

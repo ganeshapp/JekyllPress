@@ -11,6 +11,7 @@ import '../../../core/providers/image_provider.dart';
 import '../../../core/providers/posts_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../about/presentation/about_screen.dart';
+import '../../config/presentation/config_screen.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../widgets/post_card.dart';
 import '../widgets/empty_posts_view.dart';
@@ -116,6 +117,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       post = BlogPost(
         sha: draft.originalSha,
         fileName: draft.originalFileName,
+        filePath: draft.originalFilePath,
         title: draft.title,
         date: draft.originalDate ?? '',
         rawFrontmatter: draft.originalFrontmatter,
@@ -205,12 +207,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             child: Column(
               children: [
                 _buildHeader(context, ref, user, config),
+                if (config != null && config.contentDirs.length > 1)
+                  _buildContentDirSwitcher(config),
                 _buildTabBar(draftsCount),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildContent(postsState),
+                      _buildContent(postsState, config),
                       _buildDraftsContent(draftsState),
                     ],
                   ),
@@ -304,6 +308,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   ) {
     final postsState = ref.watch(postsNotifierProvider);
     final isRefreshing = postsState is PostsLoaded && postsState.isRefreshing;
+    final syncLabel = _syncProgressLabel(postsState);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
@@ -353,7 +358,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ],
                   ],
                 ),
-                if (config != null)
+                if (syncLabel != null)
+                  Text(
+                    syncLabel,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 12,
+                          color: const Color(0xFFE8A87C),
+                        ),
+                  )
+                else if (config != null)
                   Text(
                     '${config.repoOwner} · ${config.branch}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -414,7 +427,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               if (value == 'logout') {
                 await _confirmLogout();
               } else if (value == 'change_repo') {
-                await _confirmChangeRepository();
+                if (config != null) await _openRepositorySettings(config);
               } else if (value == 'about') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -468,41 +481,88 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     await ref.read(authNotifierProvider.notifier).logout();
   }
 
-  /// Confirm and perform repository change: clears config plus the posts
-  /// cache and drafts, which are specific to the current repository
-  Future<void> _confirmChangeRepository() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2F23),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Change Repository?'),
-        content: const Text(
-          'Drafts and cached posts are specific to this repository and '
-          'will be removed. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFE57373),
+  /// Open the config screen PRE-FILLED with the current settings. When
+  /// it pops after a save: a repo/branch change removes the repo-scoped
+  /// local data (the config screen confirms this first), any save
+  /// triggers a resync.
+  Future<void> _openRepositorySettings(AppConfig config) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => ConfigScreen(initialConfig: config),
+      ),
+    );
+    if (saved != true || !mounted) return;
+
+    final newConfig =
+        ref.read(configNotifierProvider.notifier).currentConfig;
+    if (newConfig == null) return;
+
+    final repoChanged = newConfig.repoOwner != config.repoOwner ||
+        newConfig.repoName != config.repoName ||
+        newConfig.branch != config.branch;
+    if (repoChanged) {
+      // Drafts and cached posts belong to the previous repository
+      await _clearLocalData();
+    }
+    await ref.read(postsNotifierProvider.notifier).refresh();
+  }
+
+  /// 'Syncing x of y...' while changed post bodies are being fetched
+  String? _syncProgressLabel(PostsState postsState) {
+    if (postsState is PostsLoaded &&
+        postsState.isRefreshing &&
+        postsState.syncTotal != null) {
+      return 'Syncing ${postsState.syncDone ?? 0} of '
+          '${postsState.syncTotal}...';
+    }
+    return null;
+  }
+
+  /// Choice chips to switch the content dir being synced/published
+  /// (only shown when collections beyond the posts folder are configured)
+  Widget _buildContentDirSwitcher(AppConfig config) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final dir in config.contentDirs)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(dir),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace',
+                  color: dir == config.activeContentDir
+                      ? const Color(0xFF0D1B14)
+                      : const Color(0xFFA8B5A0),
+                ),
+                selected: dir == config.activeContentDir,
+                selectedColor: const Color(0xFFE8A87C),
+                backgroundColor: const Color(0xFF162A1E),
+                showCheckmark: false,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(
+                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                  ),
+                ),
+                onSelected: (_) => _switchContentDir(config, dir),
+              ),
             ),
-            child: const Text('Change'),
-          ),
         ],
       ),
     );
+  }
 
-    if (confirmed != true) return;
-
-    await _clearLocalData();
-    await ref.read(configNotifierProvider.notifier).clearConfig();
+  Future<void> _switchContentDir(AppConfig config, String dir) async {
+    if (dir == config.activeContentDir) return;
+    HapticFeedback.selectionClick();
+    await ref.read(configNotifierProvider.notifier).setActiveContentDir(dir);
+    await ref.read(postsNotifierProvider.notifier).refresh();
   }
 
   /// Wipe all repo/account-scoped local data: posts cache, drafts,
@@ -514,7 +574,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     await ref.read(imageServiceProvider).clearAllLocalImages();
   }
 
-  Widget _buildContent(PostsState postsState) {
+  Widget _buildContent(PostsState postsState, AppConfig? config) {
     return switch (postsState) {
       PostsInitial() => _buildLoadingView(),
       PostsLoading(cachedPosts: final cached) => cached.isEmpty
@@ -522,11 +582,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           : _buildPostsList(cached, isLoading: true),
       PostsLoaded(
         posts: final posts,
+        isRefreshing: final isRefreshing,
         syncError: final syncError,
         lastSynced: final lastSynced,
       ) =>
         posts.isEmpty
-            ? const EmptyPostsView()
+            // The very first sync starts from an empty cache - show the
+            // loading view (with progress) rather than 'No Posts Yet'
+            ? (isRefreshing
+                ? _buildLoadingView(_syncProgressLabel(postsState))
+                : EmptyPostsView(
+                    postsFolder: config?.activeContentDir ?? '_posts',
+                  ))
             : _buildPostsList(
                 posts,
                 errorMessage: syncError,
@@ -538,12 +605,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     };
   }
 
-  Widget _buildLoadingView() {
-    return const Center(
+  Widget _buildLoadingView([String? label]) {
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
+          const SizedBox(
             width: 40,
             height: 40,
             child: CircularProgressIndicator(
@@ -551,10 +618,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               color: Color(0xFFE8A87C),
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
-            'Loading posts...',
-            style: TextStyle(
+            label ?? 'Loading posts...',
+            style: const TextStyle(
               color: Color(0xFFA8B5A0),
               fontSize: 14,
             ),

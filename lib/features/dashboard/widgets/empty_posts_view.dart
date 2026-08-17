@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 class EmptyPostsView extends StatelessWidget {
-  const EmptyPostsView({super.key});
+  /// Repo-relative folder the app syncs posts from (shown in the copy)
+  final String postsFolder;
+
+  const EmptyPostsView({super.key, this.postsFolder = '_posts'});
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +38,7 @@ class EmptyPostsView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Your _posts folder is empty.\nTap the button below to create your first post!',
+              'Your $postsFolder folder is empty.\nTap the button below to create your first post!',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     height: 1.6,

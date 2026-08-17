@@ -54,10 +54,16 @@ class PublishNotifier extends _$PublishNotifier {
     return configState is ConfigLoaded ? configState.config : null;
   }
 
-  /// Publish a new post
+  /// Publish a new post. [publishDate]/[layout]/[categories]/[tags] come
+  /// from the editor's Post settings sheet; null falls back to the config
+  /// defaults, '' / empty list omits the key (see PublishService.createPost).
   Future<bool> publishNewPost({
     required String title,
     required String bodyContent,
+    DateTime? publishDate,
+    String? layout,
+    List<String>? categories,
+    List<String>? tags,
   }) async {
     final config = _config;
     if (config == null) {
@@ -73,6 +79,10 @@ class PublishNotifier extends _$PublishNotifier {
         config: config,
         title: title,
         bodyContent: bodyContent,
+        publishDate: publishDate,
+        layout: layout,
+        categories: categories,
+        tags: tags,
       );
 
       switch (result) {
@@ -90,10 +100,17 @@ class PublishNotifier extends _$PublishNotifier {
     }
   }
 
-  /// Update an existing post
+  /// Update an existing post. When all merge params are null the original
+  /// front matter is preserved byte-exact; otherwise the sheet edits are
+  /// merged into the modeled keys and unmodeled entries pass through
+  /// verbatim (see PublishService.updatePost).
   Future<bool> publishUpdate({
     required BlogPost originalPost,
     required String newBodyContent,
+    DateTime? publishDate,
+    String? layout,
+    List<String>? categories,
+    List<String>? tags,
   }) async {
     final config = _config;
     if (config == null) {
@@ -109,6 +126,10 @@ class PublishNotifier extends _$PublishNotifier {
         config: config,
         originalPost: originalPost,
         newBodyContent: newBodyContent,
+        publishDate: publishDate,
+        layout: layout,
+        categories: categories,
+        tags: tags,
       );
 
       switch (result) {

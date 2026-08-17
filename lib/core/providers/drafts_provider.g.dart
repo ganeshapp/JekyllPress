@@ -24,7 +24,7 @@ final draftsBoxProvider = AutoDisposeProvider<Box<LocalDraft>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef DraftsBoxRef = AutoDisposeProviderRef<Box<LocalDraft>>;
-String _$draftsNotifierHash() => r'ec1d0dc15ea4cec4044e18c63c7b25cb99c7985d';
+String _$draftsNotifierHash() => r'd9f2483aca7e0a3cf926b9b96762161cd8097936';
 
 /// Manages local drafts - saving, loading, and deleting
 ///

@@ -7,7 +7,7 @@ part of 'folder_browser_provider.dart';
 // **************************************************************************
 
 String _$folderBrowserNotifierHash() =>
-    r'50885d63ff284e58fc5207a1758fe205a4fbc001';
+    r'de3cee4b0f2c7f493b05a6ccc0ffb0833687022b';
 
 /// Manages folder browsing state for a GitHub repository
 ///

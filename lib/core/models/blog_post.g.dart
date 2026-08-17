@@ -19,6 +19,7 @@ class BlogPostAdapter extends TypeAdapter<BlogPost> {
     return BlogPost(
       sha: fields[0] as String?,
       fileName: fields[1] as String?,
+      filePath: fields[8] as String?,
       title: fields[2] as String,
       date: fields[3] as String,
       rawFrontmatter: fields[4] as String?,
@@ -31,11 +32,13 @@ class BlogPostAdapter extends TypeAdapter<BlogPost> {
   @override
   void write(BinaryWriter writer, BlogPost obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.sha)
       ..writeByte(1)
       ..write(obj.fileName)
+      ..writeByte(8)
+      ..write(obj.filePath)
       ..writeByte(2)
       ..write(obj.title)
       ..writeByte(3)

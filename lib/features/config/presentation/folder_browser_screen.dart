@@ -4,16 +4,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/folder_browser_provider.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// Clean and validate a user-typed new-folder path relative to
+/// [basePath]. Returns the full repo-relative path, or null when the
+/// input is empty or contains invalid segments ('.', '..', blanks).
+String? joinNewFolderPath(String basePath, String input) {
+  final cleaned = input.trim().replaceAll(RegExp(r'^/+|/+$'), '');
+  if (cleaned.isEmpty) return null;
+
+  final segments = cleaned.split('/').map((s) => s.trim()).toList();
+  for (final segment in segments) {
+    if (segment.isEmpty || segment == '.' || segment == '..') return null;
+  }
+
+  final normalized = segments.join('/');
+  return basePath.isEmpty ? normalized : '$basePath/$normalized';
+}
+
 /// Screen for browsing folders in a GitHub repository
 class FolderBrowserScreen extends ConsumerStatefulWidget {
   final String repoOwner;
   final String repoName;
+
+  /// Branch to browse; null uses the repo default branch
+  final String? branch;
   final String? initialPath;
 
   const FolderBrowserScreen({
     super.key,
     required this.repoOwner,
     required this.repoName,
+    this.branch,
     this.initialPath,
   });
 
@@ -22,16 +42,31 @@ class FolderBrowserScreen extends ConsumerStatefulWidget {
 }
 
 class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
+  final _newFolderController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     // Initialize the folder browser after the first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(folderBrowserNotifierProvider.notifier).initialize(
-            repoOwner: widget.repoOwner,
-            repoName: widget.repoName,
-          );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final notifier = ref.read(folderBrowserNotifierProvider.notifier);
+      await notifier.initialize(
+        repoOwner: widget.repoOwner,
+        repoName: widget.repoName,
+        branch: widget.branch,
+      );
+      // Open at the currently configured folder, if any
+      final initialPath = widget.initialPath;
+      if (initialPath != null && initialPath.isNotEmpty && mounted) {
+        await notifier.navigateToFolder(initialPath);
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _newFolderController.dispose();
+    super.dispose();
   }
 
   void _selectCurrentFolder() {
@@ -48,6 +83,78 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   void _navigateUp() {
     HapticFeedback.selectionClick();
     ref.read(folderBrowserNotifierProvider.notifier).navigateUp();
+  }
+
+  /// Type a folder path that doesn't exist yet. GitHub has no empty
+  /// directories - the folder is created implicitly on first upload -
+  /// so this simply returns the typed path as the selection.
+  Future<void> _promptNewFolder() async {
+    final state = ref.read(folderBrowserNotifierProvider);
+    _newFolderController.clear();
+
+    final input = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2F23),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('New Folder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _newFolderController,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 15,
+              ),
+              decoration: const InputDecoration(
+                hintText: '_wiki or docs/notes',
+              ),
+              onSubmitted: (value) => Navigator.pop(context, value),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Created inside ${state.isAtRoot ? 'the repository root' : '/${state.currentPath}'} - '
+              'GitHub creates the folder with your first upload.',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFFA8B5A0),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, _newFolderController.text),
+            child: const Text('Use Folder'),
+          ),
+        ],
+      ),
+    );
+
+    if (input == null || !mounted) return;
+    final path = joinNewFolderPath(state.currentPath, input);
+    if (path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid folder name')),
+      );
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).pop(path);
   }
 
   @override
@@ -96,14 +203,25 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
             ),
           ),
           if (state.isLoading)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Color(0xFFE8A87C),
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFE8A87C),
+                ),
               ),
             ),
+          IconButton(
+            onPressed: _promptNewFolder,
+            icon: const Icon(Icons.create_new_folder_rounded),
+            tooltip: 'New folder',
+            style: IconButton.styleFrom(
+              foregroundColor: const Color(0xFFE8A87C),
+            ),
+          ),
         ],
       ),
     );

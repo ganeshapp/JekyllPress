@@ -40,6 +40,13 @@ class PostsLoaded extends PostsState {
   final bool isRefreshing;
   final DateTime? lastSynced;
 
+  /// Sync progress while [isRefreshing]: changed files fetched so far /
+  /// total changed files. Null when no fetch is in flight (nothing
+  /// changed, or refresh not started) - the dashboard shows
+  /// 'Syncing x of y' only when both are set.
+  final int? syncDone;
+  final int? syncTotal;
+
   /// Non-null when the last refresh failed but cached posts are shown
   final String? syncError;
 
@@ -47,6 +54,8 @@ class PostsLoaded extends PostsState {
     required this.posts,
     this.isRefreshing = false,
     this.lastSynced,
+    this.syncDone,
+    this.syncTotal,
     this.syncError,
   });
 }
@@ -124,6 +133,11 @@ class PostsNotifier extends _$PostsNotifier {
     return latest;
   }
 
+  /// Cache/box key for a synced post: the full repo-relative path when
+  /// known (unique across _posts subfolders), else the bare filename
+  /// (v1 records, local drafts)
+  String? _cacheKey(BlogPost post) => post.filePath ?? post.fileName;
+
   /// Save posts to Hive cache, stamping each with the sync time.
   /// Entries are built first, then written with clear + putAll in one
   /// sequence to minimize the window for a partial cache.
@@ -131,9 +145,10 @@ class PostsNotifier extends _$PostsNotifier {
     final box = ref.read(postsBoxProvider);
     final entries = <String, BlogPost>{};
     for (final post in posts) {
-      if (post.fileName != null) {
+      final key = _cacheKey(post);
+      if (key != null) {
         post.lastSynced = syncTime;
-        entries[post.fileName!] = post;
+        entries[key] = post;
       }
     }
     await box.clear();
@@ -178,16 +193,28 @@ class PostsNotifier extends _$PostsNotifier {
     try {
       final contentService = ref.read(contentServiceProvider);
 
-      // Create map of existing posts for SHA comparison
+      // Create map of existing posts for SHA comparison, keyed by full
+      // repo-relative path (v1 records fall back to '<postsPath>/<name>')
       final existingMap = {
         for (var p in currentPosts)
-          if (p.fileName != null) p.fileName!: p
+          if (!p.isLocalDraft && p.fileName != null)
+            (p.filePath ?? '${config.postsPath}/${p.fileName}'): p
       };
 
-      // Sync (only fetches changed files)
+      // Sync (only fetches changed files), surfacing progress so the
+      // dashboard can show 'Syncing x of y'
       final posts = await contentService.syncPosts(
         config: config,
         existingPosts: existingMap,
+        onProgress: (done, total) {
+          state = PostsLoaded(
+            posts: currentPosts,
+            isRefreshing: true,
+            lastSynced: _latestSync(currentPosts),
+            syncDone: done,
+            syncTotal: total,
+          );
+        },
       );
 
       // Include local drafts
@@ -249,16 +276,18 @@ class PostsNotifier extends _$PostsNotifier {
   /// Update a post
   Future<void> updatePost(BlogPost post) async {
     final box = ref.read(postsBoxProvider);
-    if (post.fileName != null) {
-      await box.put(post.fileName, post);
+    final key = _cacheKey(post);
+    if (key != null) {
+      await box.put(key, post);
     }
-    
+
     final currentPosts = switch (state) {
       PostsLoaded(posts: final p) => p,
       _ => <BlogPost>[],
     };
-    
-    final index = currentPosts.indexWhere((p) => p.fileName == post.fileName);
+
+    final index =
+        key == null ? -1 : currentPosts.indexWhere((p) => _cacheKey(p) == key);
     if (index != -1) {
       currentPosts[index] = post;
       state = PostsLoaded(

@@ -88,7 +88,7 @@ final localImageMapBoxProvider = AutoDisposeProvider<Box<String>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef LocalImageMapBoxRef = AutoDisposeProviderRef<Box<String>>;
-String _$imageManagerHash() => r'1fe6606f06ce8c004ebdd3a74c6550367492c816';
+String _$imageManagerHash() => r'8380f838654742bc81ada7e650066e36bd795dba';
 
 /// Notifier for managing image operations
 /// keepAlive so upload statuses survive while the editor preview
@@ -107,7 +107,7 @@ final imageManagerProvider =
 );
 
 typedef _$ImageManager = Notifier<Map<String, ImageUploadStatus>>;
-String _$imageResolverHash() => r'99b741e2547c439fc7f0ce9970e5661b5a9c0f68';
+String _$imageResolverHash() => r'6265c6e90570beb255aa5a1783a8f04d0b7ab4b0';
 
 /// Provider to resolve image paths for preview
 /// Returns local file path if available, otherwise GitHub raw URL

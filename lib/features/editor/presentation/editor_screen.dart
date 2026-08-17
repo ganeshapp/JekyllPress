@@ -6,6 +6,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
+import '../../../core/providers/config_provider.dart';
 import '../../../core/providers/drafts_provider.dart';
 import '../../../core/providers/editor_provider.dart';
 import '../../../core/providers/image_provider.dart';
@@ -97,6 +98,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     final controller = ref.read(editorControllerProvider.notifier);
 
+    // Config front matter defaults pre-fill the Post settings sheet for
+    // brand-new posts (the user can clear them there)
+    final configState = ref.read(configNotifierProvider);
+    final config = configState is ConfigLoaded ? configState.config : null;
+
     if (widget.resumeDraft != null) {
       // Resuming a draft - the draft content is the baseline, so an
       // untouched resumed draft doesn't show as "Editing"
@@ -104,11 +110,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         title: widget.resumeDraft!.title,
         bodyContent: widget.resumeDraft!.bodyContent,
         originalPost: widget.resumeDraft!.isEditingExisting ? widget.post : null,
+        defaultLayout: config?.defaultLayout,
+        defaultCategories: config?.defaultCategories ?? const [],
+        defaultTags: config?.defaultTags ?? const [],
       );
     } else if (widget.post != null) {
       controller.initializeWithPost(widget.post!);
     } else {
-      controller.initializeNewPost();
+      controller.initializeNewPost(
+        defaultLayout: config?.defaultLayout,
+        defaultCategories: config?.defaultCategories ?? const [],
+        defaultTags: config?.defaultTags ?? const [],
+      );
     }
   }
 
@@ -272,19 +285,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     try {
       final publishNotifier = ref.read(publishNotifierProvider.notifier);
+      final editorState = ref.read(editorControllerProvider);
       bool success;
 
       if (isNewPost) {
-        // Create new post
+        // Create new post - the Post settings sheet values drive the
+        // front matter ('' / empty list = omit the key)
         success = await publishNotifier.publishNewPost(
           title: title,
           bodyContent: bodyContent,
+          publishDate: editorState.publishDate,
+          layout: editorState.layout,
+          categories: editorState.categories,
+          tags: editorState.tags,
         );
       } else {
-        // Update existing post
+        // Update existing post. Untouched settings pass null so the
+        // original front matter is preserved byte-exact; edited settings
+        // are merged with unmodeled fields passing through verbatim.
+        final settingsEdited = editorState.frontmatterEdited;
         success = await publishNotifier.publishUpdate(
           originalPost: widget.post!,
           newBodyContent: bodyContent,
+          publishDate: editorState.publishDate,
+          layout: settingsEdited ? editorState.layout : null,
+          categories: settingsEdited ? editorState.categories : null,
+          tags: settingsEdited ? editorState.tags : null,
         );
       }
 
@@ -514,7 +540,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               return _buildSaveStatusIndicator(saveStatus, hasUnsavedChanges);
             },
           ),
-          const SizedBox(width: 12),
+          IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            color: const Color(0xFFA8B5A0),
+            tooltip: 'Post settings',
+            onPressed: _showPostSettings,
+          ),
+          const SizedBox(width: 4),
           ElevatedButton(
             onPressed: _isPublishing ? null : _handleSave,
             style: ElevatedButton.styleFrom(
@@ -1273,6 +1305,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
   }
 
+  void _showPostSettings() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A2F23),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => const _PostSettingsSheet(),
+    );
+  }
+
   void _showMarkdownHelp() {
     showModalBottomSheet(
       context: context,
@@ -1364,6 +1408,424 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+}
+
+/// Post settings bottom sheet: publication date/time, layout, categories,
+/// tags, and a read-only preview of custom front matter fields. All state
+/// lives in [EditorController]; this sheet only renders and mutates it.
+class _PostSettingsSheet extends ConsumerStatefulWidget {
+  const _PostSettingsSheet();
+
+  @override
+  ConsumerState<_PostSettingsSheet> createState() => _PostSettingsSheetState();
+}
+
+class _PostSettingsSheetState extends ConsumerState<_PostSettingsSheet> {
+  late final TextEditingController _layoutController;
+
+  @override
+  void initState() {
+    super.initState();
+    _layoutController = TextEditingController(
+      text: ref.read(editorControllerProvider).layout,
+    );
+  }
+
+  @override
+  void dispose() {
+    _layoutController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateTime() async {
+    final state = ref.read(editorControllerProvider);
+    final initial =
+        state.publishDate ?? state.originalDate ?? DateTime.now();
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) return;
+
+    ref.read(editorControllerProvider.notifier).updatePublishDate(
+          DateTime(date.year, date.month, date.day, time.hour, time.minute),
+        );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} · $hh:$mm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final editorState = ref.watch(editorControllerProvider);
+    final controller = ref.read(editorControllerProvider.notifier);
+    final effectiveDate = editorState.publishDate ??
+        editorState.originalDate ??
+        DateTime.now();
+
+    return Padding(
+      // Keep the sheet above the keyboard while typing chips/layout
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.tune_rounded,
+                  color: Color(0xFFE8A87C),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Post settings',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Publication date + time
+            Text(
+              'Publication date',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            Material(
+              color: const Color(0xFF162A1E),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: _pickDateTime,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF2D4A3E).withAlpha(80),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.event_rounded,
+                        size: 18,
+                        color: Color(0xFFE8A87C),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _formatDateTime(effectiveDate),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFFF5F5F0),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.edit_rounded,
+                        size: 16,
+                        color: const Color(0xFFA8B5A0).withAlpha(150),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (editorState.publishDate == null) ...[
+              const SizedBox(height: 6),
+              Text(
+                editorState.originalDate != null
+                    ? 'Current post date - tap to change'
+                    : 'Set automatically when you publish - tap to override',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: const Color(0xFFA8B5A0).withAlpha(150),
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+
+            // Layout
+            Text(
+              'Layout',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _layoutController,
+              onChanged: controller.updateLayout,
+              style: const TextStyle(
+                fontSize: 14,
+                fontFamily: 'monospace',
+                color: Color(0xFFF5F5F0),
+              ),
+              decoration: InputDecoration(
+                hintText: 'Leave empty to use the site default',
+                hintStyle: TextStyle(
+                  fontSize: 13,
+                  color: const Color(0xFFA8B5A0).withAlpha(150),
+                ),
+                filled: true,
+                fillColor: const Color(0xFF162A1E),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFE8A87C),
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Categories
+            _ChipEditor(
+              label: 'Categories',
+              hint: 'Add a category...',
+              values: editorState.categories,
+              onChanged: controller.updateCategories,
+            ),
+            const SizedBox(height: 20),
+
+            // Tags
+            _ChipEditor(
+              label: 'Tags',
+              hint: 'Add a tag...',
+              values: editorState.tags,
+              onChanged: controller.updateTags,
+            ),
+
+            // Custom (passthrough) fields - read-only preview
+            if (editorState.passthrough.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Text(
+                    'Custom fields',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 14,
+                    color: Color(0xFFA8B5A0),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1B14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF2D4A3E).withAlpha(80),
+                  ),
+                ),
+                child: Text(
+                  editorState.passthrough.values.join('\n'),
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    height: 1.5,
+                    color: Color(0xFFA8B5A0),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'These fields are preserved as-is when you publish',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: const Color(0xFFA8B5A0).withAlpha(150),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Chip input for categories/tags: shows current values as removable
+/// chips plus a text field that adds a chip on submit
+class _ChipEditor extends StatefulWidget {
+  final String label;
+  final String hint;
+  final List<String> values;
+  final ValueChanged<List<String>> onChanged;
+
+  const _ChipEditor({
+    required this.label,
+    required this.hint,
+    required this.values,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ChipEditor> createState() => _ChipEditorState();
+}
+
+class _ChipEditorState extends State<_ChipEditor> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _add(String raw) {
+    final value = raw.trim();
+    _controller.clear();
+    if (value.isEmpty) return;
+    if (widget.values.contains(value)) return;
+    widget.onChanged([...widget.values, value]);
+    // Keep the keyboard up for entering several values in a row
+    _focusNode.requestFocus();
+  }
+
+  void _remove(String value) {
+    widget.onChanged(
+      widget.values.where((v) => v != value).toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.label,
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 8),
+        if (widget.values.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final value in widget.values)
+                Chip(
+                  label: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFFF5F5F0),
+                    ),
+                  ),
+                  backgroundColor: const Color(0xFF2D4A3E),
+                  side: BorderSide.none,
+                  deleteIcon: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: Color(0xFFA8B5A0),
+                  ),
+                  onDeleted: () => _remove(value),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          onSubmitted: _add,
+          textInputAction: TextInputAction.done,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Color(0xFFF5F5F0),
+          ),
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            hintStyle: TextStyle(
+              fontSize: 13,
+              color: const Color(0xFFA8B5A0).withAlpha(150),
+            ),
+            filled: true,
+            fillColor: const Color(0xFF162A1E),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: const Color(0xFF2D4A3E).withAlpha(80),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFE8A87C),
+                width: 2,
+              ),
+            ),
+            suffixIcon: IconButton(
+              icon: const Icon(
+                Icons.add_rounded,
+                size: 20,
+                color: Color(0xFFE8A87C),
+              ),
+              onPressed: () => _add(_controller.text),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

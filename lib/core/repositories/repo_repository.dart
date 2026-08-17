@@ -2,30 +2,52 @@ import 'package:dio/dio.dart';
 import '../models/github_repo.dart';
 import '../services/dio_client.dart';
 
+/// Outcome of checking whether a repository looks like a Jekyll site.
+/// A clean pair of 404s is [notJekyll]; anything that prevented the
+/// check (network, 403/rate limit, ...) is [couldNotVerify] - never
+/// silently reported as "not Jekyll".
+enum JekyllRepoCheck {
+  /// _config.yml or the posts dir exists on the selected branch
+  jekyll,
+
+  /// Both probes returned clean 404s - definitely not a Jekyll site
+  notJekyll,
+
+  /// A probe failed for a non-404 reason (offline, 403, rate limit, ...)
+  couldNotVerify,
+}
+
 /// Repository for fetching GitHub repositories.
 /// Auth is handled by the shared [ApiClient] Dio.
 class RepoRepository {
+  /// Repos fetched per page / max pages (90 most recently pushed total)
+  static const reposPerPage = 30;
+  static const maxRepoPages = 3;
+
+  /// Branches fetched per request (single page)
+  static const branchesPerPage = 100;
+
   final Dio _dio;
 
   RepoRepository({required Dio dio}) : _dio = dio;
 
-  /// Fetch all repositories for the authenticated user
-  /// Returns repositories sorted by most recently pushed
+  /// Fetch repositories the authenticated user can push a blog to:
+  /// owned, collaborator, and organization repos, sorted by most
+  /// recently pushed. Fetches up to [maxRepoPages] pages of
+  /// [reposPerPage].
   Future<List<GitHubRepo>> getUserRepos() async {
     final List<GitHubRepo> allRepos = [];
-    int page = 1;
-    const perPage = 100;
 
     try {
-      while (true) {
+      for (int page = 1; page <= maxRepoPages; page++) {
         final response = await _dio.get(
           '/user/repos',
           queryParameters: {
             'sort': 'pushed',
             'direction': 'desc',
-            'per_page': perPage,
+            'per_page': reposPerPage,
             'page': page,
-            'type': 'owner', // Only repos owned by user
+            'affiliation': 'owner,collaborator,organization_member',
           },
         );
 
@@ -37,8 +59,7 @@ class RepoRepository {
             reposJson.map((json) => GitHubRepo.fromJson(json)).toList(),
           );
 
-          if (reposJson.length < perPage) break;
-          page++;
+          if (reposJson.length < reposPerPage) break;
         } else {
           throw Exception('Failed to fetch repositories');
         }
@@ -52,28 +73,96 @@ class RepoRepository {
     return allRepos;
   }
 
-  /// Check if a repository likely contains a Jekyll site
-  /// by looking for _posts or _config.yml
-  Future<bool> isJekyllRepo(GitHubRepo repo) async {
+  /// Fetch a single repository by owner/name (manual repo entry for
+  /// repos the paginated listing misses)
+  Future<GitHubRepo> getRepo({
+    required String repoOwner,
+    required String repoName,
+  }) async {
     try {
-      // Try to get the _posts directory
-      await _dio.get(
-        '/repos/${repo.ownerLogin}/${repo.name}/contents/_posts',
-      );
-      return true;
+      final response = await _dio.get('/repos/$repoOwner/$repoName');
+      if (response.statusCode == 200 && response.data != null) {
+        return GitHubRepo.fromJson(response.data);
+      }
+      throw Exception('Failed to fetch repository');
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        // No _posts folder, try _config.yml
-        try {
-          await _dio.get(
-            '/repos/${repo.ownerLogin}/${repo.name}/contents/_config.yml',
-          );
-          return true;
-        } catch (_) {
-          return false;
-        }
+        throw ApiException(
+            'Repository $repoOwner/$repoName was not found - check the '
+            'name, and that the app has access to it');
       }
-      return false;
+      throw ApiException(ApiClient.friendlyError(e));
+    }
+  }
+
+  /// Fetch branch names for a repository (first [branchesPerPage],
+  /// which covers any realistic blog repo)
+  Future<List<String>> getBranches({
+    required String repoOwner,
+    required String repoName,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/repos/$repoOwner/$repoName/branches',
+        queryParameters: {'per_page': branchesPerPage},
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        final List<dynamic> branchesJson = response.data;
+        return branchesJson
+            .map((json) => json['name'] as String)
+            .toList();
+      }
+      throw Exception('Failed to fetch branches');
+    } on DioException catch (e) {
+      throw ApiException(ApiClient.friendlyError(e));
+    }
+  }
+
+  /// Check if a repository likely contains a Jekyll site by looking for
+  /// _config.yml OR [postsPath] on [branch] (defaults to the repo's
+  /// default branch). Distinguishes 'definitely not' (clean 404s) from
+  /// 'could not verify' (network/403/...).
+  Future<JekyllRepoCheck> isJekyllRepo(
+    GitHubRepo repo, {
+    String postsPath = '_posts',
+    String? branch,
+  }) async {
+    final ref = branch ?? repo.defaultBranch;
+
+    final configResult = await _probePath(repo, '_config.yml', ref);
+    if (configResult == JekyllRepoCheck.jekyll) return JekyllRepoCheck.jekyll;
+
+    final postsResult = await _probePath(repo, postsPath, ref);
+    if (postsResult == JekyllRepoCheck.jekyll) return JekyllRepoCheck.jekyll;
+
+    // Only a pair of clean 404s means "definitely not Jekyll"
+    if (configResult == JekyllRepoCheck.notJekyll &&
+        postsResult == JekyllRepoCheck.notJekyll) {
+      return JekyllRepoCheck.notJekyll;
+    }
+    return JekyllRepoCheck.couldNotVerify;
+  }
+
+  /// Probe a single path on [ref]: jekyll (200), notJekyll (404), or
+  /// couldNotVerify (anything else)
+  Future<JekyllRepoCheck> _probePath(
+    GitHubRepo repo,
+    String path,
+    String ref,
+  ) async {
+    try {
+      final response = await _dio.get(
+        '/repos/${repo.ownerLogin}/${repo.name}/contents/$path',
+        queryParameters: {'ref': ref},
+      );
+      return response.statusCode == 200
+          ? JekyllRepoCheck.jekyll
+          : JekyllRepoCheck.couldNotVerify;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return JekyllRepoCheck.notJekyll;
+      }
+      return JekyllRepoCheck.couldNotVerify;
     }
   }
 }

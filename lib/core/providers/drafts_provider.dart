@@ -119,6 +119,7 @@ class DraftsNotifier extends _$DraftsNotifier {
       fileName: post.fileName ?? '',
       date: post.date,
       rawFrontmatter: post.rawFrontmatter,
+      filePath: post.filePath,
     );
   }
 

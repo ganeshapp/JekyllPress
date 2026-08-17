@@ -25,7 +25,7 @@ final publishServiceProvider = AutoDisposeProvider<PublishService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PublishServiceRef = AutoDisposeProviderRef<PublishService>;
-String _$publishNotifierHash() => r'07e35547fc459fc8a48458e48447296f1d62b441';
+String _$publishNotifierHash() => r'f2099de6f59da0610b95a24a03ef93f2cf2fb4d2';
 
 /// Notifier for managing publish operations
 ///

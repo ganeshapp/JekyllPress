@@ -20,16 +20,23 @@ class FakeContentService extends ContentService {
   /// When set, syncPosts blocks on this until completed
   Completer<List<BlogPost>>? gate;
 
+  /// When set, syncPosts reports this (done, total) sequence
+  List<(int, int)> progressScript = const [];
+
   int syncCalls = 0;
 
   @override
   Future<List<BlogPost>> syncPosts({
     required AppConfig config,
     required Map<String, BlogPost> existingPosts,
+    void Function(int done, int total)? onProgress,
   }) async {
     syncCalls++;
     final pending = gate;
     if (pending != null) return pending.future;
+    for (final (done, total) in progressScript) {
+      onProgress?.call(done, total);
+    }
     final handler = onSync;
     if (handler == null) throw Exception('network down');
     return handler();
@@ -202,6 +209,33 @@ void main() {
       final state = container.read(postsNotifierProvider);
       expect(state, isA<PostsLoaded>());
       expect((state as PostsLoaded).posts.length, 1);
+    });
+
+    test('surfaces sync progress through the refreshing state', () async {
+      await postsBox.put(
+        '2026-07-01-a.md',
+        _post('2026-07-01-a.md', '2026-07-01'),
+      );
+      fakeService.progressScript = const [(0, 2), (1, 2), (2, 2)];
+      fakeService.onSync = () => [_post('2026-08-10-c.md', '2026-08-10')];
+
+      final progress = <(int?, int?)>[];
+      container.listen(postsNotifierProvider, (_, next) {
+        if (next is PostsLoaded && next.isRefreshing && next.syncTotal != null) {
+          progress.add((next.syncDone, next.syncTotal));
+        }
+      });
+      container.read(postsNotifierProvider);
+      await _settle();
+
+      expect(progress, [(0, 2), (1, 2), (2, 2)]);
+      // Progress fields are cleared once the refresh lands
+      final state = container.read(postsNotifierProvider);
+      expect(state, isA<PostsLoaded>());
+      final loaded = state as PostsLoaded;
+      expect(loaded.isRefreshing, isFalse);
+      expect(loaded.syncDone, isNull);
+      expect(loaded.syncTotal, isNull);
     });
 
     test('reports PostsError when no repository is configured', () async {

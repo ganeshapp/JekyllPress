@@ -78,6 +78,7 @@ class FolderBrowserState {
 class FolderBrowserNotifier extends _$FolderBrowserNotifier {
   late String _repoOwner;
   late String _repoName;
+  String? _branch;
   late Dio _dio;
 
   @override
@@ -87,13 +88,16 @@ class FolderBrowserNotifier extends _$FolderBrowserNotifier {
     return const FolderBrowserState();
   }
 
-  /// Initialize the browser with repo details and load root folders
+  /// Initialize the browser with repo details and load root folders.
+  /// [branch] is the branch to browse; null uses the repo default.
   Future<void> initialize({
     required String repoOwner,
     required String repoName,
+    String? branch,
   }) async {
     _repoOwner = repoOwner;
     _repoName = repoName;
+    _branch = branch;
     await _loadFolders('');
   }
 
@@ -122,7 +126,11 @@ class FolderBrowserNotifier extends _$FolderBrowserNotifier {
           ? '/repos/$_repoOwner/$_repoName/contents'
           : '/repos/$_repoOwner/$_repoName/contents/$path';
 
-      final response = await _dio.get(endpoint);
+      final branch = _branch;
+      final response = await _dio.get(
+        endpoint,
+        queryParameters: branch == null ? null : {'ref': branch},
+      );
 
       if (response.statusCode == 200 && response.data != null) {
         final List<dynamic> items = response.data;

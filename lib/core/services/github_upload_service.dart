@@ -51,6 +51,7 @@ class GitHubUploadService {
       try {
         final checkResponse = await _dio.get(
           '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
+          queryParameters: {'ref': config.branch},
         );
         if (checkResponse.statusCode == 200) {
           existingSha = checkResponse.data['sha'] as String?;
@@ -96,16 +97,16 @@ class GitHubUploadService {
     }
   }
 
-  /// Check whether a post file already exists in _posts on the configured
-  /// branch. Returns true when taken, false when free (404).
-  /// Throws on auth/network errors.
+  /// Check whether a post file already exists at [path] (full
+  /// repo-relative path) on the configured branch. Returns true when
+  /// taken, false when free (404). Throws on auth/network errors.
   Future<bool> postExists({
     required AppConfig config,
-    required String filename,
+    required String path,
   }) async {
     try {
       final response = await _dio.get(
-        '/repos/${config.repoOwner}/${config.repoName}/contents/_posts/$filename',
+        '/repos/${config.repoOwner}/${config.repoName}/contents/$path',
         queryParameters: {'ref': config.branch},
       );
       return response.statusCode == 200;
@@ -117,18 +118,19 @@ class GitHubUploadService {
     }
   }
 
-  /// Upload a markdown post file.
+  /// Upload a markdown post file to [path] (full repo-relative path,
+  /// e.g. _posts/2024-01-01-foo.md or _wiki/foo.md).
   /// On a stale-sha conflict for an update (409, or 422 sha mismatch),
   /// re-fetches the file's current sha once and retries the PUT once.
   Future<UploadResult> uploadPost({
     required AppConfig config,
-    required String filename,
+    required String path,
     required String content,
     String? existingSha,
     String? commitMessage,
   }) async {
     final base64Content = base64Encode(utf8.encode(content));
-    final filePath = '_posts/$filename';
+    final filename = path.split('/').last;
 
     Map<String, dynamic> buildBody(String? sha) {
       final body = <String, dynamic>{
@@ -145,7 +147,7 @@ class GitHubUploadService {
     try {
       return await _putFile(
         config: config,
-        filePath: filePath,
+        filePath: path,
         body: buildBody(existingSha),
       );
     } on DioException catch (e) {
@@ -164,7 +166,7 @@ class GitHubUploadService {
           'This post changed on GitHub since it was loaded. Pull to refresh and retry.';
       final freshSha = await _fetchCurrentSha(
         config: config,
-        filePath: filePath,
+        filePath: path,
       );
       if (freshSha == null) {
         return const UploadFailure(staleMessage);
@@ -172,7 +174,7 @@ class GitHubUploadService {
       try {
         return await _putFile(
           config: config,
-          filePath: filePath,
+          filePath: path,
           body: buildBody(freshSha),
         );
       } on DioException {
