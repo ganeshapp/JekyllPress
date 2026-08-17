@@ -25,7 +25,7 @@ final imageServiceProvider = AutoDisposeProvider<ImageService>.internal(
 // ignore: unused_element
 typedef ImageServiceRef = AutoDisposeProviderRef<ImageService>;
 String _$githubUploadServiceHash() =>
-    r'996f82a2384aa38b335d7df61740cc31d7df4f80';
+    r'ac2c05cc06731f9883cadbd075218cf4e6f28457';
 
 /// Provider for GitHubUploadService
 ///
@@ -45,6 +45,29 @@ final githubUploadServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef GithubUploadServiceRef = AutoDisposeProviderRef<GitHubUploadService>;
+String _$imageAuthHeadersHash() => r'90290503732fde8f1c63e431a32b532a8d11da30';
+
+/// Auth headers for loading raw.githubusercontent.com images in the
+/// editor preview (private repos reject unauthenticated raw fetches).
+/// Reads the token via the same source as the shared ApiClient.
+///
+/// Copied from [imageAuthHeaders].
+@ProviderFor(imageAuthHeaders)
+final imageAuthHeadersProvider =
+    AutoDisposeFutureProvider<Map<String, String>?>.internal(
+  imageAuthHeaders,
+  name: r'imageAuthHeadersProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$imageAuthHeadersHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef ImageAuthHeadersRef
+    = AutoDisposeFutureProviderRef<Map<String, String>?>;
 String _$localImageMapBoxHash() => r'c1476a2e261b40a3602d6923812f18bd5b2a9ade';
 
 /// Provider for the local_image_map Hive box
@@ -65,14 +88,16 @@ final localImageMapBoxProvider = AutoDisposeProvider<Box<String>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef LocalImageMapBoxRef = AutoDisposeProviderRef<Box<String>>;
-String _$imageManagerHash() => r'0ccc515f7fc1a5c73e659089f5c6354420979806';
+String _$imageManagerHash() => r'f99be1a5a1d560f3a0432a4d58c2eafdf11a9ee5';
 
-/// Notifier for managing image operations
+/// Notifier for managing media (image + video) operations
+/// keepAlive so upload statuses survive while the editor preview
+/// subscribes/unsubscribes (overlays keep updating mid-upload)
 ///
 /// Copied from [ImageManager].
 @ProviderFor(ImageManager)
-final imageManagerProvider = AutoDisposeNotifierProvider<ImageManager,
-    Map<String, ImageUploadStatus>>.internal(
+final imageManagerProvider =
+    NotifierProvider<ImageManager, Map<String, ImageUploadStatus>>.internal(
   ImageManager.new,
   name: r'imageManagerProvider',
   debugGetCreateSourceHash:
@@ -81,8 +106,8 @@ final imageManagerProvider = AutoDisposeNotifierProvider<ImageManager,
   allTransitiveDependencies: null,
 );
 
-typedef _$ImageManager = AutoDisposeNotifier<Map<String, ImageUploadStatus>>;
-String _$imageResolverHash() => r'226a42037bce7070f4316fcd21820a79bbf8d9d8';
+typedef _$ImageManager = Notifier<Map<String, ImageUploadStatus>>;
+String _$imageResolverHash() => r'6265c6e90570beb255aa5a1783a8f04d0b7ab4b0';
 
 /// Provider to resolve image paths for preview
 /// Returns local file path if available, otherwise GitHub raw URL

@@ -3,17 +3,38 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/folder_browser_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/l10n.dart';
+
+/// Clean and validate a user-typed new-folder path relative to
+/// [basePath]. Returns the full repo-relative path, or null when the
+/// input is empty or contains invalid segments ('.', '..', blanks).
+String? joinNewFolderPath(String basePath, String input) {
+  final cleaned = input.trim().replaceAll(RegExp(r'^/+|/+$'), '');
+  if (cleaned.isEmpty) return null;
+
+  final segments = cleaned.split('/').map((s) => s.trim()).toList();
+  for (final segment in segments) {
+    if (segment.isEmpty || segment == '.' || segment == '..') return null;
+  }
+
+  final normalized = segments.join('/');
+  return basePath.isEmpty ? normalized : '$basePath/$normalized';
+}
 
 /// Screen for browsing folders in a GitHub repository
 class FolderBrowserScreen extends ConsumerStatefulWidget {
   final String repoOwner;
   final String repoName;
+
+  /// Branch to browse; null uses the repo default branch
+  final String? branch;
   final String? initialPath;
 
   const FolderBrowserScreen({
     super.key,
     required this.repoOwner,
     required this.repoName,
+    this.branch,
     this.initialPath,
   });
 
@@ -22,16 +43,31 @@ class FolderBrowserScreen extends ConsumerStatefulWidget {
 }
 
 class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
+  final _newFolderController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     // Initialize the folder browser after the first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(folderBrowserNotifierProvider.notifier).initialize(
-            repoOwner: widget.repoOwner,
-            repoName: widget.repoName,
-          );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final notifier = ref.read(folderBrowserNotifierProvider.notifier);
+      await notifier.initialize(
+        repoOwner: widget.repoOwner,
+        repoName: widget.repoName,
+        branch: widget.branch,
+      );
+      // Open at the currently configured folder, if any
+      final initialPath = widget.initialPath;
+      if (initialPath != null && initialPath.isNotEmpty && mounted) {
+        await notifier.navigateToFolder(initialPath);
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _newFolderController.dispose();
+    super.dispose();
   }
 
   void _selectCurrentFolder() {
@@ -50,13 +86,78 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
     ref.read(folderBrowserNotifierProvider.notifier).navigateUp();
   }
 
+  /// Type a folder path that doesn't exist yet. GitHub has no empty
+  /// directories - the folder is created implicitly on first upload -
+  /// so this simply returns the typed path as the selection.
+  Future<void> _promptNewFolder() async {
+    final state = ref.read(folderBrowserNotifierProvider);
+    _newFolderController.clear();
+
+    final input = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.newFolderDialogTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _newFolderController,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 15,
+              ),
+              decoration: InputDecoration(
+                hintText: context.l10n.newFolderHint,
+              ),
+              onSubmitted: (value) => Navigator.pop(context, value),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              state.isAtRoot
+                  ? context.l10n.newFolderHelpRoot
+                  : context.l10n.newFolderHelpPath(state.currentPath),
+              style: context.textTheme.bodySmall?.copyWith(height: 1.5),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.l10n.commonCancel),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, _newFolderController.text),
+            child: Text(context.l10n.useFolder),
+          ),
+        ],
+      ),
+    );
+
+    if (input == null || !mounted) return;
+    final path = joinNewFolderPath(state.currentPath, input);
+    if (path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.enterValidFolderName)),
+      );
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).pop(path);
+  }
+
   @override
   Widget build(BuildContext context) {
     final browserState = ref.watch(folderBrowserNotifierProvider);
 
     return Scaffold(
       body: Container(
-        decoration: AppTheme.backgroundGradient,
+        decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
           child: Column(
             children: [
@@ -81,60 +182,71 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close_rounded),
-            tooltip: 'Cancel',
+            tooltip: context.l10n.commonCancel,
             style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFFA8B5A0),
+              foregroundColor: context.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Select Folder',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              context.l10n.selectFolderTitle,
+              style: context.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
             ),
           ),
           if (state.isLoading)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Color(0xFFE8A87C),
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
               ),
             ),
+          IconButton(
+            onPressed: _promptNewFolder,
+            icon: const Icon(Icons.create_new_folder_rounded),
+            tooltip: context.l10n.newFolderTooltip,
+            style: IconButton.styleFrom(
+              foregroundColor: context.colorScheme.primary,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildBreadcrumb(FolderBrowserState state) {
+    final scheme = context.colorScheme;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF162A1E),
+        color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF2D4A3E).withAlpha(80),
+          color: scheme.outline.withAlpha(80),
         ),
       ),
       child: Row(
         children: [
           Icon(
             state.isAtRoot ? Icons.home_rounded : Icons.folder_rounded,
-            color: const Color(0xFFE8A87C),
+            color: scheme.primary,
             size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               state.isAtRoot ? '/' : '/${state.currentPath}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 14,
-                color: Color(0xFFF5F5F0),
+                color: scheme.onSurface,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -143,7 +255,7 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
             IconButton(
               onPressed: _navigateUp,
               icon: const Icon(Icons.arrow_upward_rounded),
-              tooltip: 'Go up',
+              tooltip: context.l10n.goUpTooltip,
               iconSize: 20,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(
@@ -151,7 +263,7 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
                 minHeight: 32,
               ),
               style: IconButton.styleFrom(
-                foregroundColor: const Color(0xFFE8A87C),
+                foregroundColor: scheme.primary,
               ),
             ),
         ],
@@ -160,11 +272,10 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   }
 
   Widget _buildFolderList(FolderBrowserState state) {
+    final scheme = context.colorScheme;
     if (state.isLoading && state.folders.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFFE8A87C),
-        ),
+        child: CircularProgressIndicator(),
       );
     }
 
@@ -175,15 +286,15 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline_rounded,
-                color: Color(0xFFE57373),
+                color: scheme.error,
                 size: 48,
               ),
               const SizedBox(height: 16),
               Text(
                 state.error!,
-                style: const TextStyle(color: Color(0xFFE57373)),
+                style: TextStyle(color: scheme.error),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -192,7 +303,7 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
                   ref.read(folderBrowserNotifierProvider.notifier).refresh();
                 },
                 icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Retry'),
+                label: Text(context.l10n.commonRetry),
               ),
             ],
           ),
@@ -209,21 +320,21 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
             children: [
               Icon(
                 Icons.folder_open_rounded,
-                color: const Color(0xFFA8B5A0).withAlpha(150),
+                color: scheme.onSurfaceVariant.withAlpha(150),
                 size: 64,
               ),
               const SizedBox(height: 16),
               Text(
-                'No subfolders',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFFA8B5A0),
+                context.l10n.noSubfolders,
+                style: context.textTheme.titleMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
               ),
               const SizedBox(height: 8),
               Text(
-                'This folder has no subfolders.\nYou can select this folder or go back.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFA8B5A0).withAlpha(180),
+                context.l10n.noSubfoldersBody,
+                style: context.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant.withAlpha(180),
                     ),
                 textAlign: TextAlign.center,
               ),
@@ -237,7 +348,8 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
       onRefresh: () async {
         await ref.read(folderBrowserNotifierProvider.notifier).refresh();
       },
-      color: const Color(0xFFE8A87C),
+      color: scheme.primary,
+      backgroundColor: scheme.surfaceContainerHigh,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: state.folders.length,
@@ -250,13 +362,14 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   }
 
   Widget _buildFolderTile(RepoFolder folder) {
+    final scheme = context.colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2F23),
+        color: scheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF2D4A3E).withAlpha(60),
+          color: scheme.outline.withAlpha(60),
         ),
       ),
       child: Material(
@@ -271,12 +384,12 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8A87C).withAlpha(20),
+                    color: scheme.primary.withAlpha(20),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.folder_rounded,
-                    color: Color(0xFFE8A87C),
+                    color: scheme.primary,
                     size: 24,
                   ),
                 ),
@@ -284,16 +397,16 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
                 Expanded(
                   child: Text(
                     folder.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFFF5F5F0),
+                      color: scheme.onSurface,
                     ),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFFA8B5A0),
+                  color: scheme.onSurfaceVariant,
                   size: 24,
                 ),
               ],
@@ -305,13 +418,14 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   }
 
   Widget _buildSelectButton(FolderBrowserState state) {
+    final scheme = context.colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1B14),
+        color: scheme.surface,
         border: Border(
           top: BorderSide(
-            color: const Color(0xFF2D4A3E).withAlpha(60),
+            color: scheme.outline.withAlpha(60),
           ),
         ),
       ),
@@ -321,18 +435,18 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Selected path:',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFFA8B5A0),
-                  ),
+              context.l10n.selectedPathLabel,
+              style: context.textTheme.bodySmall,
             ),
             const SizedBox(height: 4),
             Text(
-              state.isAtRoot ? '(repository root)' : state.currentPath,
-              style: const TextStyle(
+              state.isAtRoot
+                  ? context.l10n.repositoryRootLabel
+                  : state.currentPath,
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 14,
-                color: Color(0xFFE8A87C),
+                color: scheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -343,7 +457,7 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
               child: ElevatedButton.icon(
                 onPressed: state.isLoading ? null : _selectCurrentFolder,
                 icon: const Icon(Icons.check_rounded, size: 20),
-                label: const Text('Select This Folder'),
+                label: Text(context.l10n.selectThisFolder),
               ),
             ),
           ],

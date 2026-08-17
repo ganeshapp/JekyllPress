@@ -1,6 +1,8 @@
 # Miscellaneous
 *.class
 *.lock
+# Apps commit their lockfile so CI and release builds are reproducible.
+!pubspec.lock
 *.log
 *.pyc
 *.swp

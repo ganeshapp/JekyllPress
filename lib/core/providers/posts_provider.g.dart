@@ -6,7 +6,7 @@ part of 'posts_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$contentServiceHash() => r'db95b45abf18657d2c0586f0b124a258dcb7093a';
+String _$contentServiceHash() => r'cac05db6eea68e03e813b5bba3a54b2b41c0b884';
 
 /// Provider for ContentService
 ///
@@ -43,7 +43,7 @@ final postsBoxProvider = AutoDisposeProvider<Box<BlogPost>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PostsBoxRef = AutoDisposeProviderRef<Box<BlogPost>>;
-String _$postsNotifierHash() => r'b947a4acb2c1b8be49d44fc33a84928afea3ef46';
+String _$postsNotifierHash() => r'7bde2d63521c57f31bfb56c14eeca5724483c85d';
 
 /// Notifier for managing posts with offline-first logic
 ///

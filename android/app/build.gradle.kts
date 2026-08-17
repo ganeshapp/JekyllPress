@@ -8,7 +8,8 @@ plugins {
 android {
     namespace = "com.jekyllpress.jekyllpress"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Highest NDK required by our plugins (url_launcher_android, video_compress).
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

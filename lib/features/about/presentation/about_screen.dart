@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/l10n.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const String _version = '1.0.0';
   static const String _githubUrl = 'https://github.com/ganeshapp/JekyllPress';
+  static const String _privacyUrl =
+      'https://github.com/ganeshapp/JekyllPress/blob/main/PRIVACY.md';
   static const String _creatorUrl = 'https://www.gapp.in';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: AppTheme.backgroundGradient,
+        decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
           child: CustomScrollView(
             slivers: [
@@ -24,71 +28,51 @@ class AboutScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildLogo(),
+                      _buildLogo(context),
                       const SizedBox(height: 32),
                       _buildSection(
                         context,
                         icon: Icons.info_outline_rounded,
-                        title: 'About Jekyll Press',
-                        content:
-                            'Jekyll Press is a mobile-first CMS designed for bloggers who use '
-                            'GitHub Pages with Jekyll. Write, edit, and publish your blog posts '
-                            'directly from your phone — no laptop required.\n\n'
-                            'Built with Flutter and powered by the GitHub REST API, Jekyll Press '
-                            'brings the full blogging experience to your pocket.',
+                        title: context.l10n.aboutSectionTitle,
+                        content: context.l10n.aboutSectionBody,
                       ),
                       const SizedBox(height: 24),
                       _buildSection(
                         context,
                         icon: Icons.lightbulb_outline_rounded,
-                        title: 'Motivation',
-                        content:
-                            'As a developer who blogs on GitHub Pages, I often found inspiration '
-                            'for new posts while away from my computer. Jekyll Press was born from '
-                            'the need to capture and publish those ideas immediately, without '
-                            'waiting to get back to a desktop.\n\n'
-                            'The goal is simple: make mobile blogging on Jekyll as seamless as '
-                            'writing in any native notes app.',
+                        title: context.l10n.motivationTitle,
+                        content: context.l10n.motivationBody,
                       ),
                       const SizedBox(height: 24),
                       _buildSection(
                         context,
                         icon: Icons.play_circle_outline_rounded,
-                        title: 'How to Use',
-                        content:
-                            '1. Generate a GitHub Personal Access Token (PAT) with "repo" scope\n'
-                            '2. Paste the token in the login screen\n'
-                            '3. Select your Jekyll blog repository\n'
-                            '4. Set your image assets path (usually "assets/images")\n'
-                            '5. Start writing! Tap the + button to create a new post\n'
-                            '6. Use the Preview tab to see your formatted markdown\n'
-                            '7. Hit Publish to push directly to GitHub',
+                        title: context.l10n.howToUseTitle,
+                        content: context.l10n.howToUseBody,
                       ),
                       const SizedBox(height: 24),
                       _buildSection(
                         context,
                         icon: Icons.warning_amber_rounded,
-                        title: 'Limitations',
-                        content:
-                            '• Requires an active internet connection to publish\n'
-                            '• Only supports repositories with a _posts folder\n'
-                            '• Image uploads are limited to JPEG format\n'
-                            '• Post titles cannot be changed after publishing\n'
-                            '• Currently Android only (iOS coming soon)',
+                        title: context.l10n.limitationsTitle,
+                        content: context.l10n.limitationsBody,
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSection(
+                        context,
+                        icon: Icons.privacy_tip_outlined,
+                        title: context.l10n.privacySectionTitle,
+                        content: context.l10n.privacySectionBody,
+                        actionLabel: context.l10n.readPrivacyPolicy,
+                        onAction: () => _launchUrl(context, _privacyUrl),
                       ),
                       const SizedBox(height: 24),
                       _buildSection(
                         context,
                         icon: Icons.code_rounded,
-                        title: 'Open Source',
-                        content:
-                            'Jekyll Press is open source under the MIT License. '
-                            'Found a bug or have a feature request? Head over to GitHub to:\n\n'
-                            '• Report issues\n'
-                            '• Request features\n'
-                            '• Contribute code\n'
-                            '• Star the repo ⭐',
-                        actionLabel: 'View on GitHub',
+                        title: context.l10n.openSourceTitle,
+                        content: context.l10n.openSourceBody,
+                        actionLabel: context.l10n.viewOnGitHub,
                         onAction: () => _launchUrl(context, _githubUrl),
                       ),
                       const SizedBox(height: 32),
@@ -112,12 +96,13 @@ class AboutScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_rounded),
-        color: const Color(0xFFA8B5A0),
+        color: context.colorScheme.onSurfaceVariant,
+        tooltip: context.l10n.commonBack,
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: Text(
-        'About',
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+        context.l10n.aboutLabel,
+        style: context.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w600,
             ),
       ),
@@ -127,7 +112,8 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogo(BuildContext context) {
+    final scheme = context.colorScheme;
     return Center(
       child: Column(
         children: [
@@ -138,7 +124,7 @@ class AboutScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF000000).withAlpha(40),
+                  color: Colors.black.withAlpha(40),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -152,13 +138,13 @@ class AboutScreen extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2D4A3E),
+                      color: scheme.primaryContainer,
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.edit_note_rounded,
                       size: 48,
-                      color: Color(0xFFE8A87C),
+                      color: scheme.primary,
                     ),
                   );
                 },
@@ -166,12 +152,12 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Jekyll Press',
+          Text(
+            context.l10n.aboutAppName,
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Color(0xFFE8D5B5),
+              color: scheme.tertiary,
               letterSpacing: -0.5,
             ),
           ),
@@ -179,16 +165,27 @@ class AboutScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8A87C).withAlpha(20),
+              color: scheme.primary.withAlpha(20),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              'Version $_version',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFFE8A87C),
-                fontWeight: FontWeight.w500,
-              ),
+            // Real installed version from the platform (not a hardcoded
+            // string that goes stale)
+            child: FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                final info = snapshot.data;
+                final label = info == null
+                    ? context.l10n.versionLoading
+                    : context.l10n.versionLabel(info.version, info.buildNumber);
+                return Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -204,13 +201,14 @@ class AboutScreen extends StatelessWidget {
     String? actionLabel,
     VoidCallback? onAction,
   }) {
+    final scheme = context.colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2F23),
+        color: scheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF2D4A3E),
+          color: scheme.outline,
           width: 1,
         ),
       ),
@@ -222,22 +220,22 @@ class AboutScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8A87C).withAlpha(20),
+                  color: scheme.primary.withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   icon,
                   size: 20,
-                  color: const Color(0xFFE8A87C),
+                  color: scheme.primary,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFFE8D5B5),
+                  color: scheme.tertiary,
                 ),
               ),
             ],
@@ -245,10 +243,10 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             content,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               height: 1.6,
-              color: Color(0xFFA8B5A0),
+              color: scheme.onSurfaceVariant,
             ),
           ),
           if (actionLabel != null && onAction != null) ...[
@@ -260,8 +258,6 @@ class AboutScreen extends StatelessWidget {
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
                 label: Text(actionLabel),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFE8A87C),
-                  side: const BorderSide(color: Color(0xFFE8A87C)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -276,113 +272,124 @@ class AboutScreen extends StatelessWidget {
   }
 
   Widget _buildCreatorCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _launchUrl(context, _creatorUrl),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF2D4A3E),
-              Color(0xFF1A2F23),
-            ],
-          ),
+    final scheme = context.colorScheme;
+    return Semantics(
+      button: true,
+      label: context.l10n.creatorCardSemantics,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => _launchUrl(context, _creatorUrl),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFE8A87C).withAlpha(40),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFE8A87C),
-                    Color(0xFFD4956A),
-                  ],
-                ),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  scheme.primaryContainer,
+                  scheme.surfaceContainerHigh,
+                ],
               ),
-              child: const Center(
-                child: Text(
-                  'G',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0D1B14),
-                  ),
-                ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: scheme.primary.withAlpha(40),
+                width: 1,
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Created by',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFFA8B5A0),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        scheme.primary,
+                        Color.lerp(scheme.primary, Colors.black, 0.15)!,
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Gapp',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFE8D5B5),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.language_rounded,
-                        size: 14,
-                        color: Color(0xFFE8A87C),
+                  child: Center(
+                    child: Text(
+                      'G',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: scheme.onPrimary,
                       ),
-                      const SizedBox(width: 6),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'www.gapp.in',
+                        context.l10n.createdByLabel,
                         style: TextStyle(
-                          fontSize: 13,
-                          color: const Color(0xFFE8A87C).withAlpha(200),
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Gapp',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: scheme.tertiary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.language_rounded,
+                            size: 14,
+                            color: scheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'www.gapp.in',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: scheme.primary.withAlpha(200),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
             ),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16,
-              color: Color(0xFFA8B5A0),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildLicenseSection(BuildContext context) {
+    final scheme = context.colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1B14),
+        color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF2D4A3E),
+          color: scheme.outline,
           width: 1,
         ),
       ),
@@ -394,28 +401,28 @@ class AboutScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4DB6AC).withAlpha(20),
+                  color: context.appColors.info.withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.gavel_rounded,
                   size: 20,
-                  color: Color(0xFF4DB6AC),
+                  color: context.appColors.info,
                 ),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'MIT License',
+              Text(
+                context.l10n.mitLicenseTitle,
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFFE8D5B5),
+                  color: scheme.tertiary,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Copyright © 2026 Gapp\n\n'
             'Permission is hereby granted, free of charge, to any person obtaining '
             'a copy of this software and associated documentation files, to deal '
@@ -425,7 +432,7 @@ class AboutScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               height: 1.5,
-              color: Color(0xFF8A9A82),
+              color: scheme.onSurfaceVariant.withAlpha(200),
               fontFamily: 'monospace',
             ),
           ),
@@ -434,28 +441,38 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  void _launchUrl(BuildContext context, String url) {
-    // Copy to clipboard and show snackbar
-    // In a production app, you'd use url_launcher package
-    Clipboard.setData(ClipboardData(text: url));
+  Future<void> _launchUrl(BuildContext context, String url) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      opened = false;
+    }
+    if (opened || !context.mounted) return;
+
+    // No browser available: fall back to copying the link
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.link_rounded, color: Colors.white, size: 18),
+            Icon(
+              Icons.link_rounded,
+              color: context.colorScheme.onSurface,
+              size: 18,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Link copied: $url',
+                context.l10n.linkCopiedSnack(url),
                 style: const TextStyle(fontSize: 13),
               ),
             ),
           ],
-        ),
-        backgroundColor: const Color(0xFF2D4A3E),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
         ),
         duration: const Duration(seconds: 3),
       ),

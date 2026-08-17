@@ -26,7 +26,27 @@ final secureStorageProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef SecureStorageRef = AutoDisposeProviderRef<SecureStorageService>;
-String _$authServiceHash() => r'd7f4367bd9d2bc6b726d81761aa94e872903d71d';
+String _$authMethodHash() => r'e8919c257bb75a7eba0ed5bf1bd8a1ab0300a168';
+
+/// How the current session was established ([AuthMethods.pat],
+/// [AuthMethods.device], or null when logged out). Re-read on every auth
+/// state change.
+///
+/// Copied from [authMethod].
+@ProviderFor(authMethod)
+final authMethodProvider = AutoDisposeFutureProvider<String?>.internal(
+  authMethod,
+  name: r'authMethodProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$authMethodHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef AuthMethodRef = AutoDisposeFutureProviderRef<String?>;
+String _$authServiceHash() => r'f2ef95b5583468e00d114ac9d51a611142432187';
 
 /// Provider for AuthService
 ///
@@ -44,7 +64,7 @@ final authServiceProvider = AutoDisposeProvider<AuthService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AuthServiceRef = AutoDisposeProviderRef<AuthService>;
-String _$authNotifierHash() => r'a9d52319930034dfccfb5e59c1131935a7965da1';
+String _$authNotifierHash() => r'2676b8d84c6ee19876eabbf132b257be40bec9be';
 
 /// Notifier for managing auth state
 ///

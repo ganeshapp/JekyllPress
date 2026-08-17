@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/local_draft.dart';
@@ -7,7 +8,7 @@ part 'drafts_provider.g.dart';
 
 /// Provider for accessing the drafts Hive box
 @riverpod
-Box<LocalDraft> draftsBox(DraftsBoxRef ref) {
+Box<LocalDraft> draftsBox(Ref ref) {
   return Hive.box<LocalDraft>('drafts_box');
 }
 
@@ -118,6 +119,7 @@ class DraftsNotifier extends _$DraftsNotifier {
       fileName: post.fileName ?? '',
       date: post.date,
       rawFrontmatter: post.rawFrontmatter,
+      filePath: post.filePath,
     );
   }
 
@@ -126,6 +128,17 @@ class DraftsNotifier extends _$DraftsNotifier {
     if (post.fileName == null) return null;
     final draftId = 'draft_edit_${post.fileName}';
     return getDraft(draftId);
+  }
+
+  /// Delete all drafts (used on logout / repository change)
+  Future<void> clearAll() async {
+    try {
+      final box = ref.read(draftsBoxProvider);
+      await box.clear();
+      _loadDrafts();
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to clear drafts: $e');
+    }
   }
 
   /// Refresh drafts list
@@ -139,6 +152,10 @@ class DraftsNotifier extends _$DraftsNotifier {
 class CurrentDraftNotifier extends _$CurrentDraftNotifier {
   LocalDraft? _currentDraft;
   DateTime? _lastSavedAt;
+
+  /// True while clearAfterPublish is deleting the draft. Blocks a debounced
+  /// autosave from resurrecting the just-deleted draft.
+  bool _isClearing = false;
 
   @override
   DraftSaveStatus build() {
@@ -183,13 +200,15 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
   }
 
   /// Update draft content (called on text changes, debounced externally)
-  Future<void> updateAndSave({
+  ///
+  /// Returns true if the draft was persisted to storage. Empty content is
+  /// treated as user intent to discard: any stored record is deleted and
+  /// false is returned (also false when empty and nothing was stored).
+  Future<bool> updateAndSave({
     String? title,
     String? bodyContent,
   }) async {
-    if (_currentDraft == null) return;
-
-    state = DraftSaveStatus.saving;
+    if (_currentDraft == null || _isClearing) return false;
 
     try {
       final updatedDraft = _currentDraft!.copyWith(
@@ -199,40 +218,68 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
       );
       _currentDraft = updatedDraft;
 
-      // Only save if there's meaningful content
-      if (updatedDraft.hasContent) {
-        final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
-        await draftsNotifier.saveDraft(updatedDraft);
-        // Only update _lastSavedAt if _currentDraft wasn't cleared during await
-        if (_currentDraft != null) {
-          _lastSavedAt = updatedDraft.lastModified;
+      // Empty content: delete any stored record so old content doesn't
+      // resurrect on next open
+      if (!updatedDraft.hasContent) {
+        await _deleteStoredDraftIfExists(updatedDraft.id);
+        if (_currentDraft != null && !_isClearing) {
+          state = DraftSaveStatus.idle;
         }
+        return false;
       }
 
+      state = DraftSaveStatus.saving;
+      final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
+      await draftsNotifier.saveDraft(updatedDraft);
+
       // Only update state if not cleared during await
-      if (_currentDraft != null) {
+      if (_currentDraft != null && !_isClearing) {
+        _lastSavedAt = updatedDraft.lastModified;
         state = DraftSaveStatus.saved;
-      
-        // Reset to idle after a short delay
-        await Future.delayed(const Duration(seconds: 2));
+        _scheduleStatusReset();
+      }
+      return true;
+    } catch (e) {
+      // Only set error state if not cleared
+      if (_currentDraft != null && !_isClearing) {
+        state = DraftSaveStatus.error;
+      }
+      return false;
+    }
+  }
+
+  /// Reset saved -> idle after a short delay, without blocking the caller.
+  /// Guarded defensively in case the notifier was disposed while waiting.
+  void _scheduleStatusReset() {
+    Future.delayed(const Duration(seconds: 2), () {
+      try {
         if (state == DraftSaveStatus.saved) {
           state = DraftSaveStatus.idle;
         }
+      } catch (_) {
+        // Notifier was disposed while waiting - nothing to reset
       }
-    } catch (e) {
-      // Only set error state if not cleared
-      if (_currentDraft != null) {
-        state = DraftSaveStatus.error;
-      }
+    });
+  }
+
+  /// Delete the stored record for [draftId] if one exists
+  Future<void> _deleteStoredDraftIfExists(String draftId) async {
+    final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
+    if (draftsNotifier.getDraft(draftId) != null) {
+      await draftsNotifier.deleteDraft(draftId);
+      _lastSavedAt = null;
     }
   }
 
   /// Force save immediately (used on app background)
-  Future<void> forceSave({
+  ///
+  /// Same contract as [updateAndSave]: returns true only when the draft
+  /// was actually persisted; empty content deletes any stored record.
+  Future<bool> forceSave({
     required String title,
     required String bodyContent,
   }) async {
-    if (_currentDraft == null) return;
+    if (_currentDraft == null || _isClearing) return false;
 
     final updatedDraft = _currentDraft!.copyWith(
       title: title,
@@ -241,25 +288,39 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
     );
     _currentDraft = updatedDraft;
 
-    if (updatedDraft.hasContent) {
-      final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
-      await draftsNotifier.saveDraft(updatedDraft);
-      // Only update _lastSavedAt if _currentDraft wasn't cleared during await
-      if (_currentDraft != null) {
-        _lastSavedAt = updatedDraft.lastModified;
-      }
+    // Empty content: delete any stored record instead of skipping
+    if (!updatedDraft.hasContent) {
+      await _deleteStoredDraftIfExists(updatedDraft.id);
+      return false;
     }
+
+    final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
+    await draftsNotifier.saveDraft(updatedDraft);
+    // Only update _lastSavedAt if _currentDraft wasn't cleared during await
+    if (_currentDraft != null) {
+      _lastSavedAt = updatedDraft.lastModified;
+    }
+    return true;
   }
 
   /// Clear current draft after successful publish
   Future<void> clearAfterPublish() async {
     if (_currentDraft == null) return;
 
-    final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
-    await draftsNotifier.deleteDraft(_currentDraft!.id);
+    // Clear the session and raise the flag BEFORE awaiting so an in-flight
+    // debounced autosave can't resurrect the deleted draft
+    _isClearing = true;
+    final draftId = _currentDraft!.id;
     _currentDraft = null;
     _lastSavedAt = null;
     state = DraftSaveStatus.idle;
+
+    try {
+      final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
+      await draftsNotifier.deleteDraft(draftId);
+    } finally {
+      _isClearing = false;
+    }
   }
 
   /// Discard current draft without saving

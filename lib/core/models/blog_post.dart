@@ -8,9 +8,16 @@ class BlogPost extends HiveObject {
   @HiveField(0)
   String? sha;
 
-  /// Filename on GitHub (null if new)
+  /// Filename on GitHub - basename only (null if new)
   @HiveField(1)
   String? fileName;
+
+  /// Full repo-relative path on GitHub, e.g. _posts/2024/foo.md or
+  /// docs/_posts/foo.md. Null for local drafts and for records synced by
+  /// v1.x - callers building API paths must fall back to
+  /// 'postsPath/fileName'. Draft IDs keep using [fileName] (stable).
+  @HiveField(8)
+  String? filePath;
 
   /// Post title from frontmatter
   @HiveField(2)
@@ -28,9 +35,9 @@ class BlogPost extends HiveObject {
   @HiveField(5)
   String bodyContent;
 
-  /// True if this is a local draft not yet pushed to GitHub
-  @HiveField(6)
-  bool isLocalDraft;
+  // HiveField(6) was isLocalDraft (the vestigial second draft system,
+  // removed in v2). The index stays retired; v1 records carrying it are
+  // read fine (the value is simply ignored).
 
   /// Last sync timestamp
   @HiveField(7)
@@ -39,11 +46,11 @@ class BlogPost extends HiveObject {
   BlogPost({
     this.sha,
     this.fileName,
+    this.filePath,
     required this.title,
     required this.date,
     this.rawFrontmatter,
     required this.bodyContent,
-    this.isLocalDraft = false,
     this.lastSynced,
   });
 
@@ -51,21 +58,21 @@ class BlogPost extends HiveObject {
   BlogPost copyWith({
     String? sha,
     String? fileName,
+    String? filePath,
     String? title,
     String? date,
     String? rawFrontmatter,
     String? bodyContent,
-    bool? isLocalDraft,
     DateTime? lastSynced,
   }) {
     return BlogPost(
       sha: sha ?? this.sha,
       fileName: fileName ?? this.fileName,
+      filePath: filePath ?? this.filePath,
       title: title ?? this.title,
       date: date ?? this.date,
       rawFrontmatter: rawFrontmatter ?? this.rawFrontmatter,
       bodyContent: bodyContent ?? this.bodyContent,
-      isLocalDraft: isLocalDraft ?? this.isLocalDraft,
       lastSynced: lastSynced ?? this.lastSynced,
     );
   }

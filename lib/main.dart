@@ -6,8 +6,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'core/models/app_config.dart';
 import 'core/models/blog_post.dart';
 import 'core/models/local_draft.dart';
+import 'core/providers/theme_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_wrapper.dart';
+import 'l10n/l10n.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,22 +27,10 @@ void main() async {
   await Hive.openBox<BlogPost>('posts_box');
   await Hive.openBox<String>('local_image_map');
   await Hive.openBox<LocalDraft>('drafts_box');
-
-  // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0D1B14),
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
-
-  // Lock to portrait mode for optimal UX
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // Offline publish queue - plain-map entries, no TypeAdapter
+  await Hive.openBox<Map>('publish_queue');
+  // App-level settings (theme mode override)
+  await Hive.openBox<String>('app_settings');
 
   runApp(
     const ProviderScope(
@@ -49,15 +39,38 @@ void main() async {
   );
 }
 
-class JekyllPressApp extends StatelessWidget {
+class JekyllPressApp extends ConsumerWidget {
   const JekyllPressApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeNotifierProvider);
+
     return MaterialApp(
-      title: 'JekyllPress',
+      onGenerateTitle: (context) => context.l10n.appTitle,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeMode,
+      // Keep the status/navigation bars legible in whichever theme is
+      // active (system bars follow the resolved scheme, not a constant)
+      builder: (context, child) {
+        final scheme = Theme.of(context).colorScheme;
+        final iconBrightness = scheme.brightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: iconBrightness,
+            systemNavigationBarColor: scheme.surface,
+            systemNavigationBarIconBrightness: iconBrightness,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const AuthWrapper(),
     );
   }

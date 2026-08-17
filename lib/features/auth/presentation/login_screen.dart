@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/dio_client.dart';
+import '../../../core/services/github_oauth_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/token_format.dart';
+import '../../../l10n/l10n.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -13,9 +18,22 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
+  /// Compile-time default GitHub App / OAuth App client id
+  /// (--dart-define=GITHUB_CLIENT_ID=Iv1.xxx). Empty when not provided.
+  static const _envClientId = String.fromEnvironment('GITHUB_CLIENT_ID');
+
+  static const _appSetupUrl = 'https://github.com/settings/apps/new';
+  static const _createTokenUrl =
+      'https://github.com/settings/tokens/new?scopes=repo&description=JekyllPress';
+
   final _tokenController = TextEditingController();
+  final _clientIdController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscureToken = true;
+  bool _showSetupCard = false;
+  bool _showPatSection = false;
+  bool _showFormatWarning = false;
+  String? _storedClientId;
   late AnimationController _animController;
   late Animation<double> _fadeIn;
   late Animation<Offset> _slideUp;
@@ -43,13 +61,95 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       ),
     );
     _animController.forward();
+
+    // A client id saved during a previous session makes re-login one tap
+    ref.read(secureStorageProvider).getClientId().then((value) {
+      if (mounted) setState(() => _storedClientId = value);
+    });
   }
 
   @override
   void dispose() {
     _tokenController.dispose();
+    _clientIdController.dispose();
     _animController.dispose();
     super.dispose();
+  }
+
+  /// Client id for device-flow sign-in: compile-time default first, then
+  /// the one the user saved. Null when neither exists yet.
+  String? get _clientId {
+    if (_envClientId.isNotEmpty) return _envClientId;
+    final stored = _storedClientId;
+    if (stored != null && stored.isNotEmpty) return stored;
+    return null;
+  }
+
+  Future<void> _openUrl(String url) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.couldNotOpenBrowserLinkCopied(url)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onSignInWithGitHub() async {
+    final clientId = _clientId;
+    if (clientId == null) {
+      // First run without a compile-time id: one-time setup
+      setState(() => _showSetupCard = true);
+      return;
+    }
+    await _startDeviceFlow(clientId);
+  }
+
+  Future<void> _saveClientIdAndSignIn() async {
+    final clientId = _clientIdController.text.trim();
+    if (clientId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.pasteClientIdPrompt)),
+      );
+      return;
+    }
+    await ref.read(secureStorageProvider).saveClientId(clientId);
+    if (!mounted) return;
+    setState(() {
+      _storedClientId = clientId;
+      _showSetupCard = false;
+    });
+    await _startDeviceFlow(clientId);
+  }
+
+  Future<void> _startDeviceFlow(String clientId) async {
+    final tokens = await showModalBottomSheet<OAuthTokens>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => _DeviceFlowSheet(clientId: clientId),
+    );
+    if (tokens == null || !mounted) return;
+
+    final success = await ref
+        .read(authNotifierProvider.notifier)
+        .completeDeviceLogin(tokens: tokens, clientId: clientId);
+    if (success && mounted) {
+      // Navigation will be handled by the app's auth state listener
+      HapticFeedback.mediumImpact();
+    }
   }
 
   Future<void> _validateAndLogin() async {
@@ -73,33 +173,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     return Scaffold(
       body: Container(
-        decoration: AppTheme.backgroundGradient,
+        decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeIn,
             child: SlideTransition(
               position: _slideUp,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Spacer(flex: 2),
-                      _buildHeader(),
-                      const SizedBox(height: 48),
-                      _buildTokenField(isLoading),
-                      if (errorMessage != null) ...[
-                        const SizedBox(height: 16),
-                        _buildErrorMessage(errorMessage),
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 32,
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHeader(),
+                        const SizedBox(height: 48),
+                        if (_showSetupCard) ...[
+                          _buildSetupCard(isLoading),
+                          const SizedBox(height: 24),
+                        ],
+                        _buildDeviceSignInButton(isLoading),
+                        if (errorMessage != null) ...[
+                          const SizedBox(height: 16),
+                          _buildErrorMessage(errorMessage),
+                        ],
+                        const SizedBox(height: 20),
+                        _buildPatToggle(isLoading),
+                        if (_showPatSection) ...[
+                          const SizedBox(height: 16),
+                          _buildTokenField(isLoading),
+                          if (_showFormatWarning) ...[
+                            const SizedBox(height: 12),
+                            _buildFormatWarning(),
+                          ],
+                          const SizedBox(height: 20),
+                          _buildLoginButton(isLoading),
+                          const SizedBox(height: 8),
+                          _buildCreateTokenButton(isLoading),
+                        ],
                       ],
-                      const SizedBox(height: 32),
-                      _buildLoginButton(isLoading),
-                      const SizedBox(height: 24),
-                      _buildHelpText(),
-                      const Spacer(flex: 3),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -111,37 +228,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Widget _buildHeader() {
+    final scheme = context.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF2D4A3E).withAlpha(60),
+            color: scheme.outline.withAlpha(60),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: const Color(0xFFE8A87C).withAlpha(30),
+              color: scheme.primary.withAlpha(30),
               width: 1,
             ),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.edit_note_rounded,
             size: 40,
-            color: Color(0xFFE8A87C),
+            color: scheme.primary,
           ),
         ),
         const SizedBox(height: 24),
         Text(
-          'JekyllPress',
-          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+          context.l10n.appTitle,
+          style: context.textTheme.displayLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -1.5,
               ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Your mobile CMS for Jekyll blogs.\nConnect with your GitHub account.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          context.l10n.loginTagline,
+          style: context.textTheme.bodyMedium?.copyWith(
                 height: 1.6,
               ),
         ),
@@ -149,9 +267,138 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _buildTokenField(bool isLoading) {
+  Widget _buildDeviceSignInButton(bool isLoading) {
+    return SizedBox(
+      height: 56,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : _onSignInWithGitHub,
+        child: isLoading
+            ? SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: context.colorScheme.onPrimary,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.verified_user_rounded, size: 20),
+                  const SizedBox(width: 10),
+                  Text(context.l10n.signInWithGitHub),
+                ],
+              ),
+      ),
+    );
+  }
+
+  /// One-time card shown when no client id exists yet (neither compiled
+  /// in nor previously saved). Once an id is saved it never reappears.
+  Widget _buildSetupCard(bool isLoading) {
+    final scheme = context.colorScheme;
     return Container(
-      decoration: AppTheme.cardGlow,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: scheme.primary.withAlpha(60),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.rocket_launch_rounded,
+                size: 20,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                context.l10n.oneTimeSetupTitle,
+                style: context.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            context.l10n.oneTimeSetupBody,
+            style: context.textTheme.bodyMedium?.copyWith(
+                  height: 1.6,
+                ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: isLoading ? null : () => _openUrl(_appSetupUrl),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: Text(context.l10n.openGitHubAppSetup),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _clientIdController,
+            enabled: !isLoading,
+            autocorrect: false,
+            enableSuggestions: false,
+            style: const TextStyle(
+              fontSize: 15,
+              fontFamily: 'monospace',
+              letterSpacing: 1,
+            ),
+            decoration: InputDecoration(
+              labelText: context.l10n.clientIdLabel,
+              hintText: 'Iv23xxxxxxxxxxxxxxxx',
+            ),
+            onSubmitted: (_) => _saveClientIdAndSignIn(),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: isLoading ? null : _saveClientIdAndSignIn,
+              child: Text(context.l10n.saveAndSignIn),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPatToggle(bool isLoading) {
+    final scheme = context.colorScheme;
+    return TextButton.icon(
+      onPressed: isLoading
+          ? null
+          : () => setState(() => _showPatSection = !_showPatSection),
+      icon: Icon(
+        _showPatSection
+            ? Icons.keyboard_arrow_up_rounded
+            : Icons.keyboard_arrow_down_rounded,
+        size: 20,
+        color: scheme.onSurfaceVariant,
+      ),
+      label: Text(
+        context.l10n.usePatInstead,
+        style: TextStyle(color: scheme.onSurfaceVariant),
+      ),
+    );
+  }
+
+  Widget _buildTokenField(bool isLoading) {
+    final scheme = context.colorScheme;
+    return Container(
+      decoration: AppTheme.cardGlow(context),
       child: TextFormField(
         controller: _tokenController,
         enabled: !isLoading,
@@ -164,65 +411,107 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           letterSpacing: 1,
         ),
         decoration: InputDecoration(
-          labelText: 'Personal Access Token',
+          labelText: context.l10n.patLabel,
           hintText: 'ghp_xxxxxxxxxxxxxxxxxxxx',
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 16, right: 12),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 12),
             child: Icon(
               Icons.key_rounded,
-              color: Color(0xFFE8A87C),
+              color: scheme.primary,
               size: 22,
             ),
           ),
           suffixIcon: IconButton(
             icon: Icon(
               _obscureToken ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              color: const Color(0xFFA8B5A0),
+              color: scheme.onSurfaceVariant,
               size: 22,
             ),
+            tooltip: _obscureToken
+                ? context.l10n.showTokenTooltip
+                : context.l10n.hideTokenTooltip,
             onPressed: () => setState(() => _obscureToken = !_obscureToken),
           ),
         ),
         validator: (value) {
           if (value == null || value.trim().isEmpty) {
-            return 'Please enter your GitHub token';
+            return context.l10n.enterTokenValidation;
           }
-          if (!value.startsWith('ghp_') && 
-              !value.startsWith('github_pat_') &&
-              value.length < 20) {
-            return 'This doesn\'t look like a valid token';
-          }
+          // Format oddities only warn (below the field); GitHub may add
+          // new token formats and the API is the real judge
           return null;
+        },
+        onChanged: (value) {
+          final warn =
+              value.trim().isNotEmpty && !looksLikeGitHubToken(value);
+          if (warn != _showFormatWarning) {
+            setState(() => _showFormatWarning = warn);
+          }
         },
         onFieldSubmitted: (_) => _validateAndLogin(),
       ),
     );
   }
 
-  Widget _buildErrorMessage(String message) {
+  Widget _buildFormatWarning() {
+    final warning = context.appColors.warning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE57373).withAlpha(20),
+        color: warning.withAlpha(20),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE57373).withAlpha(50),
+          color: warning.withAlpha(50),
           width: 1,
         ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
+            Icons.warning_amber_rounded,
+            color: warning,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              context.l10n.tokenFormatWarning,
+              style: TextStyle(
+                color: warning,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorMessage(String message) {
+    final error = context.colorScheme.error;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: error.withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: error.withAlpha(50),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
             Icons.error_outline_rounded,
-            color: Color(0xFFE57373),
+            color: error,
             size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: Color(0xFFE57373),
+              style: TextStyle(
+                color: error,
                 fontSize: 14,
               ),
             ),
@@ -235,47 +524,320 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget _buildLoginButton(bool isLoading) {
     return SizedBox(
       height: 56,
-      child: ElevatedButton(
+      child: OutlinedButton(
         onPressed: isLoading ? null : _validateAndLogin,
+        style: OutlinedButton.styleFrom(
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
         child: isLoading
             ? const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFF0D1B14),
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Connect to GitHub'),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_rounded, size: 20),
+                  Text(context.l10n.connectWithToken),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, size: 20),
                 ],
               ),
       ),
     );
   }
 
-  Widget _buildHelpText() {
+  Widget _buildCreateTokenButton(bool isLoading) {
+    return TextButton.icon(
+      onPressed: isLoading ? null : () => _openUrl(_createTokenUrl),
+      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+      label: Text(context.l10n.createTokenOnGitHub),
+    );
+  }
+}
+
+/// Bottom sheet driving the GitHub Device Flow: shows the user code
+/// (auto-copied), opens github.com/login/device, and polls until the user
+/// authorizes, cancels, or the code expires. Pops with the [OAuthTokens]
+/// on success, null otherwise.
+class _DeviceFlowSheet extends ConsumerStatefulWidget {
+  final String clientId;
+
+  const _DeviceFlowSheet({required this.clientId});
+
+  @override
+  ConsumerState<_DeviceFlowSheet> createState() => _DeviceFlowSheetState();
+}
+
+class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
+  DeviceCodeResponse? _code;
+  String? _error;
+  bool _cancelled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  @override
+  void dispose() {
+    // The sheet can be dismissed without the Cancel button (system back
+    // pops it even with isDismissible: false) - always stop the polling
+    // loop when the sheet goes away
+    _cancelled = true;
+    super.dispose();
+  }
+
+  Future<void> _run() async {
+    final oauthService = ref.read(gitHubOAuthServiceProvider);
+    try {
+      final code = await oauthService.startDeviceFlow(widget.clientId);
+      if (!mounted || _cancelled) return;
+      setState(() => _code = code);
+      // Save the user a copy step: the code is on the clipboard already
+      await Clipboard.setData(ClipboardData(text: code.userCode));
+
+      final result = await oauthService.pollForToken(
+        clientId: widget.clientId,
+        deviceCode: code.deviceCode,
+        interval: code.interval,
+        expiresIn: code.expiresIn,
+        isCancelled: () => _cancelled,
+      );
+      if (!mounted) return;
+
+      switch (result) {
+        case DeviceFlowSuccess(tokens: final tokens):
+          Navigator.of(context).pop(tokens);
+        case DeviceFlowCancelled():
+          break; // The cancel button already closed the sheet
+        case DeviceFlowExpired(message: final message):
+        case DeviceFlowDenied(message: final message):
+        case DeviceFlowDisabled(message: final message):
+        case DeviceFlowFailure(message: final message):
+          setState(() => _error = message);
+      }
+    } on ApiException catch (e) {
+      if (mounted && !_cancelled) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted && !_cancelled) {
+        setState(() => _error = context.l10n.deviceSignInFailed);
+      }
+    }
+  }
+
+  void _cancel() {
+    _cancelled = true;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _openVerificationPage() async {
+    final url = _code?.verificationUri ?? 'https://github.com/login/device';
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // The code is on the clipboard; the user can browse there manually
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.l10n.signInWithGitHub,
+                    style: context.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _cancel,
+                  tooltip: context.l10n.cancelSignInTooltip,
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: context.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_error != null)
+              _buildError(_error!)
+            else if (_code == null)
+              _buildRequesting()
+            else
+              _buildWaiting(_code!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRequesting() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            context.l10n.requestingCodeFromGitHub,
+            style: TextStyle(
+              color: context.colorScheme.onSurfaceVariant,
+              fontSize: 15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWaiting(DeviceCodeResponse code) {
+    final scheme = context.colorScheme;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Need a token?',
-          style: Theme.of(context).textTheme.bodyMedium,
+          context.l10n.enterCodeOnGitHub,
+          textAlign: TextAlign.center,
+          style: context.textTheme.bodyMedium,
         ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: () {
-            // TODO: Open GitHub token creation page
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Visit GitHub → Settings → Developer Settings → Personal Access Tokens'),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: scheme.primary.withAlpha(60),
+              width: 1,
+            ),
+          ),
+          child: Text(
+            code.userCode,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'monospace',
+              letterSpacing: 4,
+              color: scheme.tertiary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          context.l10n.copiedToClipboard,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: context.appColors.success, fontSize: 12),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: _openVerificationPage,
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: Text(context.l10n.openGitHubDeviceLogin),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
               ),
-            );
-          },
-          child: const Text('Create one on GitHub →'),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              context.l10n.waitingForAuthorization,
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: _cancel,
+          child: Text(
+            context.l10n.commonCancel,
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildError(String message) {
+    final error = context.colorScheme.error;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: error.withAlpha(20),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: error.withAlpha(50),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                color: error,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: error,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: ElevatedButton(
+            onPressed: _cancel,
+            child: Text(context.l10n.commonClose),
+          ),
         ),
       ],
     );

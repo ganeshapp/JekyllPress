@@ -43,6 +43,11 @@ class LocalDraft extends HiveObject {
   @HiveField(8)
   String? originalFrontmatter;
 
+  /// Original full repo-relative path, e.g. _posts/2024/foo.md
+  /// (null if new, or for drafts saved by v1.x)
+  @HiveField(9)
+  String? originalFilePath;
+
   LocalDraft({
     required this.id,
     required this.title,
@@ -53,6 +58,7 @@ class LocalDraft extends HiveObject {
     this.originalFileName,
     this.originalDate,
     this.originalFrontmatter,
+    this.originalFilePath,
   });
 
   /// Create a new draft for a brand new post
@@ -80,6 +86,7 @@ class LocalDraft extends HiveObject {
     required String fileName,
     required String date,
     String? rawFrontmatter,
+    String? filePath,
   }) {
     final now = DateTime.now();
     return LocalDraft(
@@ -92,6 +99,7 @@ class LocalDraft extends HiveObject {
       originalFileName: fileName,
       originalDate: date,
       originalFrontmatter: rawFrontmatter,
+      originalFilePath: filePath,
     );
   }
 
@@ -118,6 +126,7 @@ class LocalDraft extends HiveObject {
       originalFileName: originalFileName,
       originalDate: originalDate,
       originalFrontmatter: originalFrontmatter,
+      originalFilePath: originalFilePath,
     );
   }
 

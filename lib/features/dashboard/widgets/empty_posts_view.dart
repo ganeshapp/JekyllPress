@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../l10n/l10n.dart';
 
 class EmptyPostsView extends StatelessWidget {
-  const EmptyPostsView({super.key});
+  /// Repo-relative folder the app syncs posts from (shown in the copy)
+  final String postsFolder;
+
+  const EmptyPostsView({super.key, this.postsFolder = '_posts'});
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -14,30 +20,30 @@ class EmptyPostsView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: const Color(0xFF2D4A3E).withAlpha(40),
+                color: scheme.outline.withAlpha(40),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: const Color(0xFFE8A87C).withAlpha(30),
+                  color: scheme.primary.withAlpha(30),
                 ),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.article_outlined,
                 size: 56,
-                color: Color(0xFFE8A87C),
+                color: scheme.primary,
               ),
             ),
             const SizedBox(height: 28),
             Text(
-              'No Posts Yet',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              context.l10n.noPostsYet,
+              style: context.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Your _posts folder is empty.\nTap the button below to create your first post!',
+              context.l10n.emptyPostsBody(postsFolder),
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: context.textTheme.bodyMedium?.copyWith(
                     height: 1.6,
                   ),
             ),
@@ -45,24 +51,24 @@ class EmptyPostsView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF162A1E),
+                color: scheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFF2D4A3E).withAlpha(80),
+                  color: scheme.outline.withAlpha(80),
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.lightbulb_outline_rounded,
-                    color: Color(0xFFE8A87C),
+                    color: scheme.primary,
                     size: 20,
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Tap the + button to start writing',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    context.l10n.tapPlusToWrite,
+                    style: context.textTheme.bodyMedium?.copyWith(
                           fontSize: 13,
                         ),
                   ),
