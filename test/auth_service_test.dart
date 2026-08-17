@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jekyllpress/core/services/auth_service.dart';
+import 'package:jekyllpress/core/services/github_oauth_service.dart';
+import 'package:jekyllpress/core/services/secure_storage_service.dart';
 
 import 'fakes.dart';
 
@@ -140,6 +142,78 @@ void main() {
 
       expect(await service.validateToken('ghp_new'), isA<AuthSuccess>());
       expect(storage.token, 'ghp_new');
+      expect(storage.authMethod, AuthMethods.pat);
+    });
+  });
+
+  group('completeDeviceLogin', () {
+    const tokens = OAuthTokens(
+      accessToken: 'ghu_access',
+      refreshToken: 'ghr_refresh',
+      expiresInSeconds: 28800,
+    );
+
+    test('valid token persists the full device-flow session', () async {
+      final storage = FakeSecureStorage();
+      final service = AuthService(
+        secureStorage: storage,
+        dio: dioWithResponse((_) => jsonResponse(_userJson, 200)),
+      );
+
+      final result = await service.completeDeviceLogin(
+        tokens: tokens,
+        clientId: 'Iv1.abc123',
+      );
+
+      expect(result, isA<AuthSuccess>());
+      expect(storage.token, 'ghu_access');
+      expect(storage.authMethod, AuthMethods.device);
+      expect(storage.clientId, 'Iv1.abc123');
+      expect(storage.refreshToken, 'ghr_refresh');
+      final expiresIn =
+          storage.accessTokenExpiry!.difference(DateTime.now()).inMinutes;
+      expect(expiresIn, inInclusiveRange(8 * 60 - 2, 8 * 60));
+    });
+
+    test('OAuth App tokens (no refresh/expiry) persist with nulls',
+        () async {
+      final storage = FakeSecureStorage();
+      final service = AuthService(
+        secureStorage: storage,
+        dio: dioWithResponse((_) => jsonResponse(_userJson, 200)),
+      );
+
+      final result = await service.completeDeviceLogin(
+        tokens: const OAuthTokens(accessToken: 'gho_access'),
+        clientId: 'Iv1.abc123',
+      );
+
+      expect(result, isA<AuthSuccess>());
+      expect(storage.token, 'gho_access');
+      expect(storage.authMethod, AuthMethods.device);
+      expect(storage.refreshToken, isNull);
+      expect(storage.accessTokenExpiry, isNull);
+    });
+
+    test('a rejected token persists nothing', () async {
+      final storage = FakeSecureStorage();
+      final service = AuthService(
+        secureStorage: storage,
+        dio: dioWithResponse(
+          (_) => jsonResponse('{"message": "Bad credentials"}', 401),
+        ),
+      );
+
+      final result = await service.completeDeviceLogin(
+        tokens: tokens,
+        clientId: 'Iv1.abc123',
+      );
+
+      expect(result, isA<AuthFailure>());
+      expect(storage.token, isNull);
+      expect(storage.authMethod, isNull);
+      expect(storage.refreshToken, isNull);
+      expect(storage.clientId, isNull);
     });
   });
 }

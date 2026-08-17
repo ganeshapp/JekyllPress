@@ -991,6 +991,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         // Watch upload state so overlays update as uploads progress
         final uploadStatus = ref.watch(imageManagerProvider)[filename];
 
+        // Auth headers so private-repo images load from
+        // raw.githubusercontent.com
+        final authHeaders = ref.watch(imageAuthHeadersProvider);
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Stack(
@@ -1005,17 +1009,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         errorBuilder: (context, error, stackTrace) =>
                             _buildImageError(alt ?? 'Image'),
                       )
-                    : Image.network(
-                        resolvedPath,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return _buildImageLoading();
-                        },
-                        errorBuilder: (context, error, stackTrace) =>
-                            _buildImageError(alt ?? 'Image'),
-                      ),
+                    : _buildNetworkImage(resolvedPath, alt, authHeaders),
               ),
               // Upload status overlay
               if (uploadStatus != null && uploadStatus.isUploading)
@@ -1101,6 +1095,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ),
         );
       },
+    );
+  }
+
+  /// Network image for the preview. GitHub raw URLs get the auth headers
+  /// (private repos); other hosts must never receive the token.
+  Widget _buildNetworkImage(
+    String url,
+    String? alt,
+    AsyncValue<Map<String, String>?> authHeaders,
+  ) {
+    final isGitHubRaw = url.startsWith('https://raw.githubusercontent.com/');
+
+    // Don't fire an unauthenticated request that would 404 on a private
+    // repo - wait for the headers to resolve first
+    if (isGitHubRaw && authHeaders.isLoading) {
+      return _buildImageLoading();
+    }
+
+    return Image.network(
+      url,
+      headers: isGitHubRaw ? authHeaders.valueOrNull : null,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return _buildImageLoading();
+      },
+      errorBuilder: (context, error, stackTrace) =>
+          _buildImageError(alt ?? 'Image'),
     );
   }
 

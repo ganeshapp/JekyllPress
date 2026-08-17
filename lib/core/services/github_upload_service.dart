@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../models/app_config.dart';
-import 'secure_storage_service.dart';
+import 'dio_client.dart';
 
 /// Result of an upload operation
 sealed class UploadResult {
@@ -20,25 +20,12 @@ class UploadFailure extends UploadResult {
   const UploadFailure(this.message);
 }
 
-/// Service for uploading files to GitHub repository
+/// Service for uploading files to GitHub repository.
+/// Auth is handled by the shared [ApiClient] Dio.
 class GitHubUploadService {
-  final SecureStorageService _secureStorage;
   final Dio _dio;
 
-  GitHubUploadService({
-    required SecureStorageService secureStorage,
-    Dio? dio,
-  })  : _secureStorage = secureStorage,
-        _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: 'https://api.github.com',
-              connectTimeout: const Duration(seconds: 60),
-              receiveTimeout: const Duration(seconds: 60),
-              headers: {
-                'Accept': 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            ));
+  GitHubUploadService({required Dio dio}) : _dio = dio;
 
   /// Upload an image file to the repository's assets folder
   Future<UploadResult> uploadImage({
@@ -47,11 +34,6 @@ class GitHubUploadService {
     required String filename,
     String? commitMessage,
   }) async {
-    final token = await _secureStorage.getToken();
-    if (token == null) {
-      return const UploadFailure('Not authenticated');
-    }
-
     try {
       // Read file and encode as base64
       final bytes = await file.readAsBytes();
@@ -69,9 +51,6 @@ class GitHubUploadService {
       try {
         final checkResponse = await _dio.get(
           '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
-          options: Options(
-            headers: {'Authorization': 'Bearer $token'},
-          ),
         );
         if (checkResponse.statusCode == 200) {
           existingSha = checkResponse.data['sha'] as String?;
@@ -99,9 +78,6 @@ class GitHubUploadService {
       final response = await _dio.put(
         '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
         data: body,
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -127,18 +103,10 @@ class GitHubUploadService {
     required AppConfig config,
     required String filename,
   }) async {
-    final token = await _secureStorage.getToken();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     try {
       final response = await _dio.get(
         '/repos/${config.repoOwner}/${config.repoName}/contents/_posts/$filename',
         queryParameters: {'ref': config.branch},
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
       );
       return response.statusCode == 200;
     } on DioException catch (e) {
@@ -159,11 +127,6 @@ class GitHubUploadService {
     String? existingSha,
     String? commitMessage,
   }) async {
-    final token = await _secureStorage.getToken();
-    if (token == null) {
-      return const UploadFailure('Not authenticated');
-    }
-
     final base64Content = base64Encode(utf8.encode(content));
     final filePath = '_posts/$filename';
 
@@ -181,7 +144,6 @@ class GitHubUploadService {
 
     try {
       return await _putFile(
-        token: token,
         config: config,
         filePath: filePath,
         body: buildBody(existingSha),
@@ -201,7 +163,6 @@ class GitHubUploadService {
       const staleMessage =
           'This post changed on GitHub since it was loaded. Pull to refresh and retry.';
       final freshSha = await _fetchCurrentSha(
-        token: token,
         config: config,
         filePath: filePath,
       );
@@ -210,7 +171,6 @@ class GitHubUploadService {
       }
       try {
         return await _putFile(
-          token: token,
           config: config,
           filePath: filePath,
           body: buildBody(freshSha),
@@ -225,7 +185,6 @@ class GitHubUploadService {
 
   /// PUT a file to the contents API. Throws DioException on HTTP errors.
   Future<UploadResult> _putFile({
-    required String token,
     required AppConfig config,
     required String filePath,
     required Map<String, dynamic> body,
@@ -233,9 +192,6 @@ class GitHubUploadService {
     final response = await _dio.put(
       '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
       data: body,
-      options: Options(
-        headers: {'Authorization': 'Bearer $token'},
-      ),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -251,7 +207,6 @@ class GitHubUploadService {
 
   /// Fetch the current sha of a file, or null if it cannot be read
   Future<String?> _fetchCurrentSha({
-    required String token,
     required AppConfig config,
     required String filePath,
   }) async {
@@ -259,9 +214,6 @@ class GitHubUploadService {
       final response = await _dio.get(
         '/repos/${config.repoOwner}/${config.repoName}/contents/$filePath',
         queryParameters: {'ref': config.branch},
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
       );
       if (response.statusCode == 200) {
         return response.data['sha'] as String?;
@@ -282,6 +234,10 @@ class GitHubUploadService {
   }
 
   UploadFailure _handleDioError(DioException e) {
+    // Rate limiting must never read as "permission denied"
+    if (ApiClient.isRateLimit(e)) {
+      return UploadFailure(ApiClient.friendlyError(e));
+    }
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
@@ -294,7 +250,7 @@ class GitHubUploadService {
         if (statusCode == 401) {
           return const UploadFailure('Authentication failed');
         } else if (statusCode == 403) {
-          // Include GitHub's message so rate-limit errors are distinguishable
+          // Include GitHub's message so permission errors are actionable
           return UploadFailure('Permission denied: $message');
         } else if (statusCode == 409) {
           return UploadFailure(

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/github_repo.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/config_provider.dart';
+import '../../../core/services/secure_storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import 'folder_browser_screen.dart';
 
@@ -361,7 +363,87 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
                 fontSize: 12,
               ),
         ),
+        if (reposAsync.valueOrNull?.isEmpty ?? false) ...[
+          const SizedBox(height: 12),
+          _buildEmptyReposHint(),
+        ],
       ],
+    );
+  }
+
+  /// Shown when GitHub returned zero repositories. For device-flow
+  /// sessions the usual cause is that the GitHub App was authorized but
+  /// never INSTALLED on the blog repo.
+  Widget _buildEmptyReposHint() {
+    final isDeviceAuth =
+        ref.watch(authMethodProvider).valueOrNull == AuthMethods.device;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8A87C).withAlpha(15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFE8A87C).withAlpha(50),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                color: Color(0xFFE8A87C),
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  isDeviceAuth
+                      ? 'No repositories found. A GitHub App only sees '
+                          'repositories it is installed on - install it on '
+                          'your blog repo, then refresh.'
+                      : 'No repositories found for this account.',
+                  style: const TextStyle(
+                    color: Color(0xFFE8A87C),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                color: const Color(0xFFE8A87C),
+                onPressed: () => ref.invalidate(userReposProvider),
+              ),
+            ],
+          ),
+          if (isDeviceAuth) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => launchUrl(
+                  Uri.parse('https://github.com/settings/installations'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: const Text('Open GitHub App installations'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFE8A87C),
+                  side: const BorderSide(color: Color(0xFFE8A87C)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

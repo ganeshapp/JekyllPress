@@ -4,15 +4,14 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/app_config.dart';
 import '../models/github_repo.dart';
 import '../repositories/repo_repository.dart';
-import 'auth_provider.dart';
+import '../services/dio_client.dart';
 
 part 'config_provider.g.dart';
 
 /// Provider for RepoRepository
 @riverpod
 RepoRepository repoRepository(Ref ref) {
-  final secureStorage = ref.watch(secureStorageProvider);
-  return RepoRepository(secureStorage: secureStorage);
+  return RepoRepository(dio: ref.watch(apiClientProvider).dio);
 }
 
 /// Provider to fetch user repositories

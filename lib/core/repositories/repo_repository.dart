@@ -1,69 +1,52 @@
 import 'package:dio/dio.dart';
 import '../models/github_repo.dart';
-import '../services/secure_storage_service.dart';
+import '../services/dio_client.dart';
 
-/// Repository for fetching GitHub repositories
+/// Repository for fetching GitHub repositories.
+/// Auth is handled by the shared [ApiClient] Dio.
 class RepoRepository {
-  final SecureStorageService _secureStorage;
   final Dio _dio;
 
-  RepoRepository({
-    required SecureStorageService secureStorage,
-    Dio? dio,
-  })  : _secureStorage = secureStorage,
-        _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: 'https://api.github.com',
-              connectTimeout: const Duration(seconds: 30),
-              receiveTimeout: const Duration(seconds: 30),
-              headers: {
-                'Accept': 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            ));
+  RepoRepository({required Dio dio}) : _dio = dio;
 
   /// Fetch all repositories for the authenticated user
   /// Returns repositories sorted by most recently pushed
   Future<List<GitHubRepo>> getUserRepos() async {
-    final token = await _secureStorage.getToken();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final List<GitHubRepo> allRepos = [];
     int page = 1;
     const perPage = 100;
 
-    while (true) {
-      final response = await _dio.get(
-        '/user/repos',
-        queryParameters: {
-          'sort': 'pushed',
-          'direction': 'desc',
-          'per_page': perPage,
-          'page': page,
-          'type': 'owner', // Only repos owned by user
-        },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
+    try {
+      while (true) {
+        final response = await _dio.get(
+          '/user/repos',
+          queryParameters: {
+            'sort': 'pushed',
+            'direction': 'desc',
+            'per_page': perPage,
+            'page': page,
+            'type': 'owner', // Only repos owned by user
           },
-        ),
-      );
-
-      if (response.statusCode == 200 && response.data != null) {
-        final List<dynamic> reposJson = response.data;
-        if (reposJson.isEmpty) break;
-
-        allRepos.addAll(
-          reposJson.map((json) => GitHubRepo.fromJson(json)).toList(),
         );
 
-        if (reposJson.length < perPage) break;
-        page++;
-      } else {
-        throw Exception('Failed to fetch repositories');
+        if (response.statusCode == 200 && response.data != null) {
+          final List<dynamic> reposJson = response.data;
+          if (reposJson.isEmpty) break;
+
+          allRepos.addAll(
+            reposJson.map((json) => GitHubRepo.fromJson(json)).toList(),
+          );
+
+          if (reposJson.length < perPage) break;
+          page++;
+        } else {
+          throw Exception('Failed to fetch repositories');
+        }
       }
+    } on DioException catch (e) {
+      // Callers show e.toString() to the user - make it a clean message
+      // (rate-limit messages from ApiClient pass through verbatim)
+      throw ApiException(ApiClient.friendlyError(e));
     }
 
     return allRepos;
@@ -72,18 +55,10 @@ class RepoRepository {
   /// Check if a repository likely contains a Jekyll site
   /// by looking for _posts or _config.yml
   Future<bool> isJekyllRepo(GitHubRepo repo) async {
-    final token = await _secureStorage.getToken();
-    if (token == null) return false;
-
     try {
       // Try to get the _posts directory
       await _dio.get(
         '/repos/${repo.ownerLogin}/${repo.name}/contents/_posts',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
-        ),
       );
       return true;
     } on DioException catch (e) {
@@ -92,11 +67,6 @@ class RepoRepository {
         try {
           await _dio.get(
             '/repos/${repo.ownerLogin}/${repo.name}/contents/_config.yml',
-            options: Options(
-              headers: {
-                'Authorization': 'Bearer $token',
-              },
-            ),
           );
           return true;
         } catch (_) {

@@ -25,7 +25,7 @@ final imageServiceProvider = AutoDisposeProvider<ImageService>.internal(
 // ignore: unused_element
 typedef ImageServiceRef = AutoDisposeProviderRef<ImageService>;
 String _$githubUploadServiceHash() =>
-    r'996f82a2384aa38b335d7df61740cc31d7df4f80';
+    r'ac2c05cc06731f9883cadbd075218cf4e6f28457';
 
 /// Provider for GitHubUploadService
 ///
@@ -45,6 +45,29 @@ final githubUploadServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef GithubUploadServiceRef = AutoDisposeProviderRef<GitHubUploadService>;
+String _$imageAuthHeadersHash() => r'90290503732fde8f1c63e431a32b532a8d11da30';
+
+/// Auth headers for loading raw.githubusercontent.com images in the
+/// editor preview (private repos reject unauthenticated raw fetches).
+/// Reads the token via the same source as the shared ApiClient.
+///
+/// Copied from [imageAuthHeaders].
+@ProviderFor(imageAuthHeaders)
+final imageAuthHeadersProvider =
+    AutoDisposeFutureProvider<Map<String, String>?>.internal(
+  imageAuthHeaders,
+  name: r'imageAuthHeadersProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$imageAuthHeadersHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef ImageAuthHeadersRef
+    = AutoDisposeFutureProviderRef<Map<String, String>?>;
 String _$localImageMapBoxHash() => r'c1476a2e261b40a3602d6923812f18bd5b2a9ade';
 
 /// Provider for the local_image_map Hive box
@@ -84,7 +107,7 @@ final imageManagerProvider =
 );
 
 typedef _$ImageManager = Notifier<Map<String, ImageUploadStatus>>;
-String _$imageResolverHash() => r'226a42037bce7070f4316fcd21820a79bbf8d9d8';
+String _$imageResolverHash() => r'99b741e2547c439fc7f0ce9970e5661b5a9c0f68';
 
 /// Provider to resolve image paths for preview
 /// Returns local file path if available, otherwise GitHub raw URL

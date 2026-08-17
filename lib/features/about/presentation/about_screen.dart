@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -434,10 +435,21 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  void _launchUrl(BuildContext context, String url) {
-    // Copy to clipboard and show snackbar
-    // In a production app, you'd use url_launcher package
-    Clipboard.setData(ClipboardData(text: url));
+  Future<void> _launchUrl(BuildContext context, String url) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      opened = false;
+    }
+    if (opened || !context.mounted) return;
+
+    // No browser available: fall back to copying the link
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(

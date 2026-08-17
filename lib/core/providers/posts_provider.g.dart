@@ -6,7 +6,7 @@ part of 'posts_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$contentServiceHash() => r'db95b45abf18657d2c0586f0b124a258dcb7093a';
+String _$contentServiceHash() => r'cac05db6eea68e03e813b5bba3a54b2b41c0b884';
 
 /// Provider for ContentService
 ///

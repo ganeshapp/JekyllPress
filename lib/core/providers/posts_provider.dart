@@ -4,7 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/app_config.dart';
 import '../models/blog_post.dart';
 import '../services/content_service.dart';
-import 'auth_provider.dart';
+import '../services/dio_client.dart';
 import 'config_provider.dart';
 
 part 'posts_provider.g.dart';
@@ -12,8 +12,7 @@ part 'posts_provider.g.dart';
 /// Provider for ContentService
 @riverpod
 ContentService contentService(Ref ref) {
-  final secureStorage = ref.watch(secureStorageProvider);
-  return ContentService(secureStorage: secureStorage);
+  return ContentService(dio: ref.watch(apiClientProvider).dio);
 }
 
 /// Provider for the posts Hive box

@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'auth_provider.dart';
+import '../services/dio_client.dart';
 
 part 'folder_browser_provider.g.dart';
 
@@ -82,15 +82,8 @@ class FolderBrowserNotifier extends _$FolderBrowserNotifier {
 
   @override
   FolderBrowserState build() {
-    _dio = Dio(BaseOptions(
-      baseUrl: 'https://api.github.com',
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    ));
+    // Shared authenticated client - auth headers come from its interceptor
+    _dio = ref.watch(apiClientProvider).dio;
     return const FolderBrowserState();
   }
 
@@ -125,26 +118,11 @@ class FolderBrowserNotifier extends _$FolderBrowserNotifier {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final secureStorage = ref.read(secureStorageProvider);
-      final token = await secureStorage.getToken();
-      if (token == null) {
-        state = state.copyWith(
-          isLoading: false,
-          error: 'Not authenticated',
-        );
-        return;
-      }
-
       final endpoint = path.isEmpty
           ? '/repos/$_repoOwner/$_repoName/contents'
           : '/repos/$_repoOwner/$_repoName/contents/$path';
 
-      final response = await _dio.get(
-        endpoint,
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
-      );
+      final response = await _dio.get(endpoint);
 
       if (response.statusCode == 200 && response.data != null) {
         final List<dynamic> items = response.data;
@@ -168,7 +146,6 @@ class FolderBrowserNotifier extends _$FolderBrowserNotifier {
         );
       }
     } on DioException catch (e) {
-      String errorMessage = 'Failed to load folders';
       if (e.response?.statusCode == 404) {
         // Empty directory or doesn't exist - treat as empty
         state = FolderBrowserState(
@@ -178,9 +155,11 @@ class FolderBrowserNotifier extends _$FolderBrowserNotifier {
         );
         return;
       }
+      // Surface the actionable cause (rate limit, offline, ...) instead
+      // of a generic message
       state = state.copyWith(
         isLoading: false,
-        error: errorMessage,
+        error: ApiClient.friendlyError(e),
       );
     } catch (e) {
       state = state.copyWith(

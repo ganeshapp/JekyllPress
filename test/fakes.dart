@@ -6,6 +6,13 @@ import 'package:jekyllpress/core/services/secure_storage_service.dart';
 /// In-memory SecureStorageService that never touches platform channels
 class FakeSecureStorage extends SecureStorageService {
   String? token;
+  String? authMethod;
+  String? clientId;
+  String? refreshToken;
+  DateTime? accessTokenExpiry;
+
+  /// Field names in the order they were written (rotation-order checks)
+  final List<String> writeLog = [];
 
   FakeSecureStorage([this.token]);
 
@@ -15,15 +22,55 @@ class FakeSecureStorage extends SecureStorageService {
   @override
   Future<void> saveToken(String value) async {
     token = value;
+    writeLog.add('token');
   }
 
   @override
   Future<void> deleteToken() async {
     token = null;
+    authMethod = null;
+    refreshToken = null;
+    accessTokenExpiry = null;
   }
 
   @override
   Future<bool> hasToken() async => token != null && token!.isNotEmpty;
+
+  @override
+  Future<String?> getAuthMethod() async => authMethod;
+
+  @override
+  Future<void> saveAuthMethod(String method) async {
+    authMethod = method;
+    writeLog.add('authMethod');
+  }
+
+  @override
+  Future<String?> getClientId() async => clientId;
+
+  @override
+  Future<void> saveClientId(String value) async {
+    clientId = value;
+    writeLog.add('clientId');
+  }
+
+  @override
+  Future<String?> getRefreshToken() async => refreshToken;
+
+  @override
+  Future<void> saveRefreshToken(String? value) async {
+    refreshToken = value;
+    writeLog.add('refreshToken');
+  }
+
+  @override
+  Future<DateTime?> getAccessTokenExpiry() async => accessTokenExpiry;
+
+  @override
+  Future<void> saveAccessTokenExpiry(DateTime? expiry) async {
+    accessTokenExpiry = expiry;
+    writeLog.add('accessTokenExpiry');
+  }
 }
 
 /// Dio adapter that returns a canned response per request

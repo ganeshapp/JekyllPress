@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/app_config.dart';
+import '../services/dio_client.dart';
 import '../services/github_upload_service.dart';
 import '../services/image_service.dart';
-import 'auth_provider.dart';
 import 'config_provider.dart';
 
 part 'image_provider.g.dart';
@@ -19,8 +19,15 @@ ImageService imageService(Ref ref) {
 /// Provider for GitHubUploadService
 @riverpod
 GitHubUploadService githubUploadService(Ref ref) {
-  final secureStorage = ref.watch(secureStorageProvider);
-  return GitHubUploadService(secureStorage: secureStorage);
+  return GitHubUploadService(dio: ref.watch(apiClientProvider).dio);
+}
+
+/// Auth headers for loading raw.githubusercontent.com images in the
+/// editor preview (private repos reject unauthenticated raw fetches).
+/// Reads the token via the same source as the shared ApiClient.
+@riverpod
+Future<Map<String, String>?> imageAuthHeaders(Ref ref) {
+  return ref.watch(apiClientProvider).authHeaders();
 }
 
 /// Provider for the local_image_map Hive box
@@ -229,12 +236,8 @@ class ImageResolver extends _$ImageResolver {
   }
 
   /// Get authorization headers for private repos
-  Future<Map<String, String>?> getAuthHeaders() async {
-    final secureStorage = ref.read(secureStorageProvider);
-    final token = await secureStorage.getToken();
-    if (token != null) {
-      return {'Authorization': 'Bearer $token'};
-    }
-    return null;
+  /// (same token source as the shared ApiClient)
+  Future<Map<String, String>?> getAuthHeaders() {
+    return ref.read(apiClientProvider).authHeaders();
   }
 }
