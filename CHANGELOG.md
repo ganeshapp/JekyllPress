@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.2 — 2026-08-18
+
+### Changed
+- The one-time GitHub App setup no longer drops you into GitHub's full
+  registration form. The button now opens it pre-filled (name, homepage,
+  Contents: Read & write, webhooks off, private) via GitHub's URL parameters,
+  leaving only "Enable Device Flow" to tick — GitHub exposes no parameter for
+  that one. The card also spells out the final step, installing the app on your
+  blog repository, which is easy to miss and leaves sign-in unable to see it.
+
 ## 2.0.1 — 2026-08-18
 
 Fixes external links doing nothing on devices with more than one browser

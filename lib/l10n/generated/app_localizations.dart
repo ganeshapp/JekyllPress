@@ -174,7 +174,7 @@ abstract class AppLocalizations {
   /// Explanation in the one-time GitHub App setup card
   ///
   /// In en, this message translates to:
-  /// **'Signing in without a token requires a free GitHub App you register once on your account. Give it the Contents: Read & write permission and enable Device Flow, then paste its Client ID here - JekyllPress remembers it forever.'**
+  /// **'Signing in without a token needs a free GitHub App on your account. The button below opens GitHub with everything pre-filled - you only have to tick \"Enable Device Flow\", then press Create GitHub App. Copy the Client ID it shows you into the box below.'**
   String get oneTimeSetupBody;
 
   /// Button opening github.com's new-app registration page
@@ -1778,6 +1778,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Link copied: {url}'**
   String linkCopiedSnack(String url);
+
+  /// Reminder that the GitHub App must also be installed on the blog repo
+  ///
+  /// In en, this message translates to:
+  /// **'Last step: on your new app\'s page, open \"Install App\" and give it access to your blog repository.'**
+  String get oneTimeSetupInstallHint;
+
+  /// Hint shown under the setup card about GitHub App name uniqueness
+  ///
+  /// In en, this message translates to:
+  /// **'If GitHub says the name is taken, add something to make it unique.'**
+  String get appNameTakenHint;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
