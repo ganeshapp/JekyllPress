@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -9,10 +8,11 @@ import 'package:jekyllpress/core/models/app_config.dart';
 import 'package:jekyllpress/core/models/blog_post.dart';
 import 'package:jekyllpress/core/providers/posts_provider.dart';
 import 'package:jekyllpress/core/services/content_service.dart';
+import 'fakes.dart';
 
 /// ContentService whose syncPosts is fully scripted from the test
 class FakeContentService extends ContentService {
-  FakeContentService() : super(dio: Dio());
+  FakeContentService() : super(dio: offlineDio());
 
   /// When set, syncPosts returns this; when null, syncPosts throws
   List<BlogPost> Function()? onSync;

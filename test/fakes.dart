@@ -136,3 +136,30 @@ ResponseBody jsonResponse(String body, int status) {
     },
   );
 }
+
+/// Adapter that fails loudly instead of letting a test reach the internet.
+///
+/// Several fakes extend real services and pass a [Dio] in, overriding only the
+/// methods they exercise. Any method left un-overridden would otherwise issue a
+/// real request to api.github.com, which fails unpredictably in CI (rate
+/// limits, 403s, no network). This turns that silent flake into a clear error.
+class _OfflineAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    throw StateError(
+      'A test tried to make a real network request to ${options.uri}. '
+      'Override the method under test, or stub the adapter.',
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+/// A [Dio] that can never reach the network. Use in place of `Dio()` when
+/// constructing fakes of real services.
+Dio offlineDio() => Dio()..httpClientAdapter = _OfflineAdapter();

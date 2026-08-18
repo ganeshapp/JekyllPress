@@ -1,13 +1,13 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jekyllpress/core/models/app_config.dart';
 import 'package:jekyllpress/core/models/blog_post.dart';
 import 'package:jekyllpress/core/services/github_upload_service.dart';
 import 'package:jekyllpress/core/services/publish_service.dart';
+import 'fakes.dart';
 
 /// Upload service with scripted existence checks and captured uploads
 class _FakeUploadService extends GitHubUploadService {
-  _FakeUploadService() : super(dio: Dio());
+  _FakeUploadService() : super(dio: offlineDio());
 
   /// Paths that report "already exists"
   Set<String> takenPaths = {};

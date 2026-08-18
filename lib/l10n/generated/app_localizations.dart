@@ -153,7 +153,7 @@ abstract class AppLocalizations {
   /// **'Could not open browser - link copied: {url}'**
   String couldNotOpenBrowserLinkCopied(String url);
 
-  /// Snackbar when the Client ID field is submitted empty
+  /// Snackbar when the Client ID field of the fallback setup card is submitted empty
   ///
   /// In en, this message translates to:
   /// **'Paste the Client ID from your GitHub App'**
@@ -165,16 +165,16 @@ abstract class AppLocalizations {
   /// **'Sign in with GitHub'**
   String get signInWithGitHub;
 
-  /// Title of the card asking for a GitHub App Client ID on first run
+  /// Title of the card asking for a GitHub App Client ID. Only shown in builds that ship no Client ID of their own
   ///
   /// In en, this message translates to:
   /// **'One-time setup'**
   String get oneTimeSetupTitle;
 
-  /// Explanation in the one-time GitHub App setup card
+  /// Explanation in the one-time GitHub App setup card, shown only in builds with no bundled Client ID
   ///
   /// In en, this message translates to:
-  /// **'Signing in without a token needs a free GitHub App on your account. The button below opens GitHub with everything pre-filled - you only have to tick \"Enable Device Flow\", then press Create GitHub App. Copy the Client ID it shows you into the box below.'**
+  /// **'This build ships without a Client ID, so signing in without a token needs a free GitHub App on your account. The button below opens GitHub with everything pre-filled - you only have to tick \"Enable Device Flow\", then press Create GitHub App. Copy the Client ID it shows you into the box below.'**
   String get oneTimeSetupBody;
 
   /// Button opening github.com's new-app registration page
@@ -453,10 +453,10 @@ abstract class AppLocalizations {
   /// **'This does not look like a Jekyll repo (no _config.yml or {postsPath})'**
   String notJekyllRepo(String postsPath);
 
-  /// Hint when zero repos are visible to a GitHub App (device-flow) session
+  /// Hint when zero repos are visible to a device-flow session
   ///
   /// In en, this message translates to:
-  /// **'No repositories found. A GitHub App only sees repositories it is installed on - install it on your blog repo, then refresh.'**
+  /// **'No repositories found for this account. If you signed in with your own GitHub App, it only sees repositories it is installed on - install it on your blog repo, then refresh. Otherwise, enter owner/repo manually below.'**
   String get noReposFoundDeviceAuth;
 
   /// Hint when the account has no repositories
@@ -1704,7 +1704,7 @@ abstract class AppLocalizations {
   /// About screen: usage section body
   ///
   /// In en, this message translates to:
-  /// **'1. Sign in with GitHub (Device Flow) or paste a Personal Access Token\n2. Select your Jekyll blog repository and branch\n3. Confirm the detected posts, drafts, and assets folders\n4. Start writing! Tap the + button to create a new post\n5. Add photos and videos straight from your gallery or camera\n6. Use the Preview tab to see your formatted markdown\n7. Hit Publish to push directly to GitHub — or queue it while offline'**
+  /// **'1. Tap \"Sign in with GitHub\" and approve the code on github.com — or paste a Personal Access Token instead\n2. Select your Jekyll blog repository and branch\n3. Confirm the detected posts, drafts, and assets folders\n4. Start writing! Tap the + button to create a new post\n5. Add photos and videos straight from your gallery or camera\n6. Use the Preview tab to see your formatted markdown\n7. Hit Publish to push directly to GitHub — or queue it while offline'**
   String get howToUseBody;
 
   /// About screen: limitations section title
@@ -1713,10 +1713,10 @@ abstract class AppLocalizations {
   /// **'Limitations'**
   String get limitationsTitle;
 
-  /// About screen: limitations section body
+  /// About screen: limitations section body, including what the GitHub sign-in grants and how to revoke it
   ///
   /// In en, this message translates to:
-  /// **'• Android only\n• Published posts cannot be renamed in-app (the filename dictates the permalink; renames would break links)\n• Videos are re-encoded with the short edge capped at 640px, and uploads are capped at 25MB\n• Repository files are edited one at a time via the GitHub API (no multi-file commits or merges)'**
+  /// **'• Android only\n• \"Sign in with GitHub\" asks for the repo scope: read and write access to your repositories, public and private. It is the narrowest scope that lets an OAuth app edit files in a private repo. JekyllPress only touches the repository you configure, and you can revoke access any time at github.com → Settings → Applications → Authorized OAuth Apps. For access to a single repository, sign in with a fine-grained Personal Access Token instead\n• Published posts cannot be renamed in-app (the filename dictates the permalink; renames would break links)\n• Videos are re-encoded with the short edge capped at 640px, and uploads are capped at 25MB\n• Repository files are edited one at a time via the GitHub API (no multi-file commits or merges)'**
   String get limitationsBody;
 
   /// About screen: privacy section title
@@ -1728,7 +1728,7 @@ abstract class AppLocalizations {
   /// About screen: privacy section body
   ///
   /// In en, this message translates to:
-  /// **'Everything stays between your device and your own GitHub repository. Your token lives in Android\'s encrypted, Keystore-backed storage; there are no analytics and no third-party servers. Logout wipes all cached content.'**
+  /// **'Everything stays between your device and your own GitHub repository. Your token lives in Android\'s encrypted, Keystore-backed storage; there are no analytics and no third-party servers. Logging out deletes the token from this device and wipes all cached content — it does not revoke the token on GitHub, so revoke it there too if you want the authorization gone.'**
   String get privacySectionBody;
 
   /// Button opening the privacy policy on GitHub
@@ -1779,19 +1779,19 @@ abstract class AppLocalizations {
   /// **'Link copied: {url}'**
   String linkCopiedSnack(String url);
 
-  /// Reminder that the GitHub App must also be installed on the blog repo
+  /// Reminder in the fallback setup card that the GitHub App must also be installed on the blog repo
   ///
   /// In en, this message translates to:
   /// **'Last step: on your new app\'s page, open \"Install App\" and give it access to your blog repository.'**
   String get oneTimeSetupInstallHint;
 
-  /// Hint shown under the setup card about GitHub App name uniqueness
+  /// Hint in the fallback setup card about GitHub App name uniqueness
   ///
   /// In en, this message translates to:
   /// **'If GitHub says the name is taken, add something to make it unique.'**
   String get appNameTakenHint;
 
-  /// Escape hatch on the device-flow error state, reopens the setup card
+  /// Escape hatch on the device-flow error state, reopens the setup card. Only shown in builds with no bundled Client ID
   ///
   /// In en, this message translates to:
   /// **'Change Client ID'**

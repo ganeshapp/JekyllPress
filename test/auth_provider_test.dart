@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jekyllpress/core/models/github_user.dart';
@@ -14,7 +13,7 @@ class FakeAuthService extends AuthService {
   final FakeSecureStorage storage;
 
   FakeAuthService._(this.result, this.storage)
-      : super(secureStorage: storage, dio: Dio());
+      : super(secureStorage: storage, dio: offlineDio());
 
   factory FakeAuthService(AuthResult result, [FakeSecureStorage? storage]) {
     return FakeAuthService._(result, storage ?? FakeSecureStorage('ghp_token'));

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -16,6 +15,7 @@ import 'package:jekyllpress/core/services/content_service.dart';
 import 'package:jekyllpress/core/services/github_upload_service.dart';
 import 'package:jekyllpress/core/services/publish_queue_service.dart';
 import 'package:jekyllpress/core/services/publish_service.dart';
+import 'fakes.dart';
 
 /// Connectivity whose stream and check results are scripted by the test
 class _FakeConnectivity implements Connectivity {
@@ -33,7 +33,7 @@ class _FakeConnectivity implements Connectivity {
 /// PublishService with scripted per-call results (empty script = success)
 class _FakePublishService extends PublishService {
   _FakePublishService()
-      : super(uploadService: GitHubUploadService(dio: Dio()));
+      : super(uploadService: GitHubUploadService(dio: offlineDio()));
 
   final List<String> createdTitles = [];
   final List<String> updatedPaths = [];
@@ -82,7 +82,7 @@ class _FakePublishService extends PublishService {
 
 /// ContentService whose sync returns nothing (posts refresh is a no-op)
 class _FakeContentService extends ContentService {
-  _FakeContentService() : super(dio: Dio());
+  _FakeContentService() : super(dio: offlineDio());
 
   int syncCalls = 0;
 

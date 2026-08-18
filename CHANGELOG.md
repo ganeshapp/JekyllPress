@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.1.0 — 2026-08-18
+
+Signing in no longer requires registering anything on GitHub.
+
+### Changed
+- **Sign-in is now tap, approve, done.** JekyllPress ships with its own OAuth
+  App Client ID, so "Sign in with GitHub" goes straight to the device code —
+  no registering a GitHub App, no ticking Enable Device Flow, no installing it
+  on your repository, no Client ID to paste. Every step of the old one-time
+  setup is gone. A device-flow Client ID is a public identifier, not a secret,
+  and a token is still only issued after you approve the code while signed in
+  to GitHub.
+- **The trade-off: the token carries the `repo` scope** — read and write access
+  to your repositories, public and private. It is the narrowest scope an OAuth
+  app can request that still reaches files in a private repo. JekyllPress only
+  touches the repository you configure, and you can revoke access any time at
+  github.com → Settings → Applications → Authorized OAuth Apps. Want access
+  limited to one repository? Sign in with a fine-grained Personal Access Token
+  instead — that path is unchanged.
+- Tokens from this sign-in do not expire, so there is nothing to renew; logging
+  out deletes the token from the device (it does not revoke it on GitHub).
+- The one-time setup card and the "Change Client ID" escape hatch now appear
+  only in builds that ship no Client ID of their own.
+- Forks and self-builders can substitute their own OAuth App or GitHub App:
+  `flutter build apk --dart-define=GITHUB_CLIENT_ID=...` (see the README).
+- About screen and privacy policy now spell out what the sign-in grants and how
+  to revoke it.
+
 ## 2.0.2 — 2026-08-18
 
 ### Changed
