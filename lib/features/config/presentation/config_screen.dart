@@ -964,9 +964,11 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
     );
   }
 
-  /// Shown when GitHub returned zero repositories. For device-flow
-  /// sessions the usual cause is that the GitHub App was authorized but
-  /// never INSTALLED on the blog repo.
+  /// Shown when GitHub returned zero repositories. The bundled OAuth App
+  /// sees every repository the `repo` scope covers, so this normally means
+  /// the account really has none - but a session started with a user's own
+  /// GitHub App only sees repositories it was INSTALLED on, hence the
+  /// installations link.
   Widget _buildEmptyReposHint() {
     final isDeviceAuth =
         ref.watch(authMethodProvider).valueOrNull == AuthMethods.device;

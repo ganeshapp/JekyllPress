@@ -17,7 +17,12 @@ class GitHubAppConfig {
     defaultValue: _defaultClientId,
   );
 
-  static const _defaultClientId = '';
+  /// The JekyllPress OAuth App (github.com/settings/developers). Public by
+  /// design: obtaining a token with it still requires the user to approve a
+  /// device code while signed in to GitHub, so it grants nothing on its own.
+  /// "Expire user access tokens" is deliberately off - GitHub only documents
+  /// secret-less refresh for GitHub Apps, and this app ships no secret.
+  static const _defaultClientId = 'Ov23linZ2ECv9m9EZL6P';
 
   /// OAuth Apps must request a scope up front; `repo` is the narrowest one
   /// that can read and write files in a private or public repository.

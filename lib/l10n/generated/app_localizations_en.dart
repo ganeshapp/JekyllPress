@@ -50,7 +50,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get oneTimeSetupTitle => 'One-time setup';
 
   @override
-  String get oneTimeSetupBody => 'Signing in without a token needs a free GitHub App on your account. The button below opens GitHub with everything pre-filled - you only have to tick \"Enable Device Flow\", then press Create GitHub App. Copy the Client ID it shows you into the box below.';
+  String get oneTimeSetupBody => 'This build ships without a Client ID, so signing in without a token needs a free GitHub App on your account. The button below opens GitHub with everything pre-filled - you only have to tick \"Enable Device Flow\", then press Create GitHub App. Copy the Client ID it shows you into the box below.';
 
   @override
   String get openGitHubAppSetup => 'Open GitHub App setup';
@@ -201,7 +201,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get noReposFoundDeviceAuth => 'No repositories found. A GitHub App only sees repositories it is installed on - install it on your blog repo, then refresh.';
+  String get noReposFoundDeviceAuth => 'No repositories found for this account. If you signed in with your own GitHub App, it only sees repositories it is installed on - install it on your blog repo, then refresh. Otherwise, enter owner/repo manually below.';
 
   @override
   String get noReposFoundForAccount => 'No repositories found for this account.';
@@ -901,19 +901,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get howToUseTitle => 'How to Use';
 
   @override
-  String get howToUseBody => '1. Sign in with GitHub (Device Flow) or paste a Personal Access Token\n2. Select your Jekyll blog repository and branch\n3. Confirm the detected posts, drafts, and assets folders\n4. Start writing! Tap the + button to create a new post\n5. Add photos and videos straight from your gallery or camera\n6. Use the Preview tab to see your formatted markdown\n7. Hit Publish to push directly to GitHub — or queue it while offline';
+  String get howToUseBody => '1. Tap \"Sign in with GitHub\" and approve the code on github.com — or paste a Personal Access Token instead\n2. Select your Jekyll blog repository and branch\n3. Confirm the detected posts, drafts, and assets folders\n4. Start writing! Tap the + button to create a new post\n5. Add photos and videos straight from your gallery or camera\n6. Use the Preview tab to see your formatted markdown\n7. Hit Publish to push directly to GitHub — or queue it while offline';
 
   @override
   String get limitationsTitle => 'Limitations';
 
   @override
-  String get limitationsBody => '• Android only\n• Published posts cannot be renamed in-app (the filename dictates the permalink; renames would break links)\n• Videos are re-encoded with the short edge capped at 640px, and uploads are capped at 25MB\n• Repository files are edited one at a time via the GitHub API (no multi-file commits or merges)';
+  String get limitationsBody => '• Android only\n• \"Sign in with GitHub\" asks for the repo scope: read and write access to your repositories, public and private. It is the narrowest scope that lets an OAuth app edit files in a private repo. JekyllPress only touches the repository you configure, and you can revoke access any time at github.com → Settings → Applications → Authorized OAuth Apps. For access to a single repository, sign in with a fine-grained Personal Access Token instead\n• Published posts cannot be renamed in-app (the filename dictates the permalink; renames would break links)\n• Videos are re-encoded with the short edge capped at 640px, and uploads are capped at 25MB\n• Repository files are edited one at a time via the GitHub API (no multi-file commits or merges)';
 
   @override
   String get privacySectionTitle => 'Privacy';
 
   @override
-  String get privacySectionBody => 'Everything stays between your device and your own GitHub repository. Your token lives in Android\'s encrypted, Keystore-backed storage; there are no analytics and no third-party servers. Logout wipes all cached content.';
+  String get privacySectionBody => 'Everything stays between your device and your own GitHub repository. Your token lives in Android\'s encrypted, Keystore-backed storage; there are no analytics and no third-party servers. Logging out deletes the token from this device and wipes all cached content — it does not revoke the token on GitHub, so revoke it there too if you want the authorization gone.';
 
   @override
   String get readPrivacyPolicy => 'Read the privacy policy';

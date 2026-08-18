@@ -97,8 +97,8 @@ class DeviceFlowDenied extends DeviceFlowResult {
 class DeviceFlowDisabled extends DeviceFlowResult {
   const DeviceFlowDisabled();
   String get message =>
-      'Device Flow is disabled for this app - enable it in the '
-      'GitHub App settings';
+      'Device Flow is disabled for this Client ID - enable it in the '
+      'app settings on GitHub';
 }
 
 /// Polling was cancelled locally (user dismissed the sign-in sheet)
@@ -126,9 +126,10 @@ class OAuthRefreshDenied implements Exception {
 /// api.github.com - these endpoints live on the web host and are the only
 /// GitHub auth flow that needs no client secret in the app).
 ///
-/// Works for both GitHub Apps (recommended: fine-grained Contents
-/// permission, expiring tokens + secret-less refresh) and classic OAuth
-/// Apps (non-expiring token, no refresh).
+/// Works for both classic OAuth Apps (what the app bundles: scope-based
+/// access, non-expiring token, no refresh) and GitHub Apps (fine-grained
+/// Contents permission, expiring tokens + secret-less refresh), which a
+/// fork can select with `--dart-define=GITHUB_CLIENT_ID`.
 class GitHubOAuthService {
   static const _deviceCodePath = '/login/device/code';
   static const _accessTokenPath = '/login/oauth/access_token';

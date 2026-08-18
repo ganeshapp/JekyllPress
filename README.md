@@ -45,6 +45,10 @@ I use AI to help me code. But I review all the edits.
 
 **[Download Latest APK](https://github.com/ganeshapp/JekyllPress/releases/latest)** (Android only)
 
+Nothing to register: install it, tap **Sign in with GitHub**, approve the code
+on github.com, and pick your blog repository. Details in
+[Signing in](#signing-in).
+
 ---
 
 ## What it does
@@ -87,47 +91,69 @@ REST API — no clone, no git commands, no merge conflicts.
 
 ## Signing in
 
-Two options. No client ID ships in the app, so Device Flow needs a free GitHub
-App you register once yourself (details below); a Personal Access Token needs
-nothing but the app.
+### Option A — Sign in with GitHub (recommended)
 
-### Option A — Sign in with GitHub (Device Flow, recommended)
+Install the APK, tap **Sign in with GitHub**, approve the 8-character code
+(auto-copied) on `github.com/login/device`, and you're in. There is nothing to
+register and nothing to paste.
 
-No token to paste, and permissions can be scoped to just your blog repo. It
-requires a free GitHub App that **you register once on your own account** (so
-no one else's server ever sees your tokens):
+**What you're granting.** JekyllPress ships with its own OAuth App Client ID,
+and the sign-in requests the **`repo` scope** — read and write access to the
+repositories on your account, public and private. It is the narrowest classic
+OAuth scope that can read and commit files in a private repository; GitHub has
+nothing finer for OAuth Apps. The app only ever touches the repository you
+configure, but the token itself is not limited to it. Want narrower access?
+Use a fine-grained Personal Access Token (Option B).
 
-1. Go to **[github.com/settings/apps/new](https://github.com/settings/apps/new)**.
-2. Name it anything (e.g. `my-jekyllpress`), set any homepage URL.
-3. Uncheck **Webhook → Active** (not needed).
-4. Under **Permissions → Repository permissions**, set **Contents** to
-   **Read and write**.
-5. Check **Enable Device Flow**.
-6. Create the app, then copy its **Client ID** (`Iv23...`).
-7. Install the app on your account and select your blog repository
-   (`github.com/apps/<your-app-slug>/installations/new`).
-8. In JekyllPress, tap **Sign in with GitHub** and paste the Client ID when
-   asked — this is a one-time step; the app remembers it.
+**Revoking.** github.com → **Settings** → **Applications** → **Authorized
+OAuth Apps** → JekyllPress. Signing out inside the app deletes the token from
+your device but does not revoke it on GitHub — do both if you want the
+authorization gone entirely.
 
-You'll get an 8-character code (auto-copied), approve it on
-`github.com/login/device`, and you're in. Tokens auto-refresh; nothing to
-maintain.
-
-**Building from source?** You can bake your own Client ID into the APK and
-skip step 8 entirely:
-
-```bash
-flutter build apk --dart-define=GITHUB_CLIENT_ID=Iv23xxxxxxxxxxxxxxxx
-```
+**Why shipping a Client ID is safe.** A device-flow Client ID is a public
+identifier, not a secret: no client secret is ever exchanged (that is the whole
+point of Device Flow), and holding the ID gets nobody a token — GitHub only
+issues one after *you* approve a device code while signed in to your own
+account, and the token is delivered to the device that asked for it. Tokens
+issued this way do not expire, so there is nothing to renew; end a session by
+signing out and/or revoking as above.
 
 ### Option B — Personal Access Token
 
 Create a token with `repo` scope (or a fine-grained token with Contents
 read/write on your blog repo) and paste it into the login screen's
-"Use a Personal Access Token instead" section.
+"Use a Personal Access Token instead" section. This is the option to pick if
+you want to hand JekyllPress access to exactly one repository.
 
 Either way, the credential is stored in Android's Keystore-backed encrypted
 storage and only ever sent to GitHub. See [PRIVACY.md](PRIVACY.md).
+
+### Using your own OAuth App or GitHub App (forks, self-builders)
+
+Override the bundled Client ID at build time — no code change needed:
+
+```bash
+flutter build apk --dart-define=GITHUB_CLIENT_ID=Ov23xxxxxxxxxxxxxxxx
+```
+
+- **OAuth App** ([github.com/settings/developers](https://github.com/settings/developers)):
+  enable Device Flow on it. The app requests the `repo` scope, which is
+  compiled in as `GitHubAppConfig.scope` in
+  [`lib/core/config/github_app_config.dart`](lib/core/config/github_app_config.dart).
+  Leave "Expire user access tokens" **off**: the APK ships no client secret,
+  and GitHub only supports secret-less refresh for GitHub Apps, so an expiring
+  OAuth-App token could not be renewed.
+- **GitHub App** ([github.com/settings/apps/new](https://github.com/settings/apps/new)),
+  if you prefer fine-grained permissions: set **Contents: Read and write**,
+  tick **Enable Device Flow**, install it on your blog repository, and use its
+  Client ID (`Iv23...`). GitHub Apps take their permissions from the
+  registration and ignore the requested scope; set `GitHubAppConfig.scope` to
+  `''` if you'd rather the request omit it. Expiring tokens are fine here —
+  the app refreshes GitHub App tokens automatically, without a secret.
+
+A build with an empty `GITHUB_CLIENT_ID` (`--dart-define=GITHUB_CLIENT_ID=`)
+falls back to asking for a Client ID on the login screen and storing it on the
+device.
 
 ---
 
@@ -179,8 +205,8 @@ flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 flutter run            # debug on a connected device
 flutter build apk      # release APK
-# optional: bake in your GitHub App client id
-flutter build apk --dart-define=GITHUB_CLIENT_ID=Iv23xxxxxxxxxxxxxxxx
+# optional: use your own OAuth App / GitHub App instead of the bundled one
+flutter build apk --dart-define=GITHUB_CLIENT_ID=Ov23xxxxxxxxxxxxxxxx
 ```
 
 Run the checks the CI runs: `flutter analyze && flutter test`.
@@ -190,7 +216,7 @@ Run the checks the CI runs: `flutter analyze && flutter test`.
 PRs welcome! Please keep `flutter analyze` clean and the tests green.
 
 **Note on security:** never commit tokens or client secrets. (Device Flow
-needs no secret — only the public Client ID ships in the app.)
+needs no secret — the Client ID that ships in the app is public by design.)
 
 ## Author
 

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -12,11 +11,12 @@ import 'package:jekyllpress/core/providers/publish_provider.dart';
 import 'package:jekyllpress/core/services/content_service.dart';
 import 'package:jekyllpress/core/services/github_upload_service.dart';
 import 'package:jekyllpress/core/services/publish_service.dart';
+import 'fakes.dart';
 
 /// PublishService returning a scripted result without any network
 class _FakePublishService extends PublishService {
   _FakePublishService(this.result)
-      : super(uploadService: GitHubUploadService(dio: Dio()));
+      : super(uploadService: GitHubUploadService(dio: offlineDio()));
 
   final PublishResult result;
 
@@ -52,7 +52,7 @@ class _FakePublishService extends PublishService {
 /// Upload service with scripted existence/upload/delete behavior so the
 /// promote flow can be exercised without any network
 class _FakeUploadService extends GitHubUploadService {
-  _FakeUploadService() : super(dio: Dio());
+  _FakeUploadService() : super(dio: offlineDio());
 
   bool targetExists = false;
   UploadResult uploadResult =
@@ -97,7 +97,7 @@ class _FakeUploadService extends GitHubUploadService {
 /// ContentService returning a scripted file body (the promote flow's
 /// already-promoted check fetches the existing target)
 class _FakeContentService extends ContentService {
-  _FakeContentService() : super(dio: Dio());
+  _FakeContentService() : super(dio: offlineDio());
 
   String fileContent = '';
 

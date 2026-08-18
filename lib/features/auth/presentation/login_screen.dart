@@ -872,14 +872,19 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
           ),
           child: Text(context.l10n.commonClose),
         ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: () {
-            _cancelled = true;
-            Navigator.of(context).pop(const _DeviceFlowChangeClientId());
-          },
-          child: Text(context.l10n.changeClientId),
-        ),
+        // Only meaningful when the app ships no client id of its own -
+        // otherwise the bundled one always wins and editing it would be a
+        // control that silently does nothing.
+        if (!GitHubAppConfig.hasBundledClientId) ...[
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: () {
+              _cancelled = true;
+              Navigator.of(context).pop(const _DeviceFlowChangeClientId());
+            },
+            child: Text(context.l10n.changeClientId),
+          ),
+        ],
       ],
     );
   }
