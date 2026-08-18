@@ -154,12 +154,23 @@ class GitHubOAuthService {
       );
 
   /// Step 1: request a device + user code pair for [clientId].
+  ///
+  /// [scope] is required for OAuth Apps (a token issued without it can read
+  /// nothing); GitHub Apps ignore it and take their permissions from the app
+  /// registration, so it is omitted when empty.
+  ///
   /// Throws [ApiException] with a user-facing message on failure.
-  Future<DeviceCodeResponse> startDeviceFlow(String clientId) async {
+  Future<DeviceCodeResponse> startDeviceFlow(
+    String clientId, {
+    String scope = '',
+  }) async {
     try {
       final response = await _dio.post(
         _deviceCodePath,
-        data: {'client_id': clientId},
+        data: {
+          'client_id': clientId,
+          if (scope.isNotEmpty) 'scope': scope,
+        },
         options: _formOptions,
       );
       final data = response.data;

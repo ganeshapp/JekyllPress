@@ -1351,5 +1351,9 @@
   "appNameTakenHint": "If GitHub says the name is taken, add something to make it unique.",
   "@appNameTakenHint": {
     "description": "Hint shown under the setup card about GitHub App name uniqueness"
+  },
+  "changeClientId": "Change Client ID",
+  "@changeClientId": {
+    "description": "Escape hatch on the device-flow error state, reopens the setup card"
   }
 }

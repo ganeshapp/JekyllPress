@@ -55,6 +55,38 @@ Future<DeviceFlowResult> _poll(
 
 void main() {
   group('startDeviceFlow', () {
+    test('sends scope for OAuth Apps and omits it when empty', () async {
+      // An OAuth App token issued without a scope can read nothing, so the
+      // scope must reach GitHub; GitHub Apps must NOT receive one.
+      RequestOptions? withScope;
+      final scoped = _service((options) {
+        withScope = options;
+        return _json({
+          'device_code': _deviceCode,
+          'user_code': 'ABCD-1234',
+          'verification_uri': 'https://github.com/login/device',
+          'expires_in': 899,
+          'interval': 5,
+        });
+      });
+      await scoped.startDeviceFlow(_clientId, scope: 'repo');
+      expect((withScope!.data as Map)['scope'], 'repo');
+
+      RequestOptions? withoutScope;
+      final unscoped = _service((options) {
+        withoutScope = options;
+        return _json({
+          'device_code': _deviceCode,
+          'user_code': 'ABCD-1234',
+          'verification_uri': 'https://github.com/login/device',
+          'expires_in': 899,
+          'interval': 5,
+        });
+      });
+      await unscoped.startDeviceFlow(_clientId);
+      expect((withoutScope!.data as Map).containsKey('scope'), isFalse);
+    });
+
     test('parses the device code response and sends the right request',
         () async {
       RequestOptions? seenOptions;

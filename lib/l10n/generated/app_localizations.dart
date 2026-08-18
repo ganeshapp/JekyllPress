@@ -1790,6 +1790,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If GitHub says the name is taken, add something to make it unique.'**
   String get appNameTakenHint;
+
+  /// Escape hatch on the device-flow error state, reopens the setup card
+  ///
+  /// In en, this message translates to:
+  /// **'Change Client ID'**
+  String get changeClientId;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
