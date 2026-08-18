@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/app_config.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
@@ -24,6 +23,7 @@ import '../../config/presentation/config_screen.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../widgets/post_card.dart';
 import '../widgets/empty_posts_view.dart';
+import '../../../core/utils/external_url.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -968,23 +968,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  /// Open a URL in the external browser (best-effort)
-  Future<void> _launchExternal(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.couldNotOpenUrl(url)),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
+  /// Open a URL in the browser (best-effort).
+  ///
+  /// [openExternalUrl] handles its own fallbacks and tells the user if it had
+  /// to copy the link instead, so there is nothing to report here.
+  Future<void> _launchExternal(String url) => openExternalUrl(context, url);
 
   /// Open the post's public URL built from the site config and the
   /// site's permalink pattern

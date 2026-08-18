@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/github_oauth_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/token_format.dart';
 import '../../../l10n/l10n.dart';
+import '../../../core/utils/external_url.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -85,26 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return null;
   }
 
-  Future<void> _openUrl(String url) async {
-    var opened = false;
-    try {
-      opened = await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
-    } catch (_) {
-      opened = false;
-    }
-    if (!opened && mounted) {
-      await Clipboard.setData(ClipboardData(text: url));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.l10n.couldNotOpenBrowserLinkCopied(url)),
-        ),
-      );
-    }
-  }
+  Future<void> _openUrl(String url) => openExternalUrl(context, url);
 
   Future<void> _onSignInWithGitHub() async {
     final clientId = _clientId;
@@ -363,12 +344,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             onSubmitted: (_) => _saveClientIdAndSignIn(),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : _saveClientIdAndSignIn,
-              child: Text(context.l10n.saveAndSignIn),
+          ElevatedButton(
+            onPressed: isLoading ? null : _saveClientIdAndSignIn,
+            // minimumSize rather than a fixed-height SizedBox: keeps the 48dp
+            // tap target but lets the button grow so the label is never
+            // clipped at larger system font scales.
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
             ),
+            child: Text(context.l10n.saveAndSignIn),
           ),
         ],
       ),
@@ -640,11 +624,9 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
 
   Future<void> _openVerificationPage() async {
     final url = _code?.verificationUri ?? 'https://github.com/login/device';
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // The code is on the clipboard; the user can browse there manually
-    }
+    // The code is already on the clipboard, so a failure here still leaves the
+    // user able to browse to the page manually.
+    await openExternalUrl(context, url);
   }
 
   @override

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/app_config.dart';
 import '../../../core/models/github_repo.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -11,6 +10,7 @@ import '../../../core/services/content_service.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/l10n.dart';
+import '../../../core/utils/external_url.dart';
 import 'folder_browser_screen.dart';
 
 /// Split a comma-separated input into trimmed, non-empty values
@@ -1016,9 +1016,9 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => launchUrl(
-                  Uri.parse('https://github.com/settings/installations'),
-                  mode: LaunchMode.externalApplication,
+                onPressed: () => openExternalUrl(
+                  context,
+                  'https://github.com/settings/installations',
                 ),
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
                 label: Text(context.l10n.openGitHubAppInstallations),

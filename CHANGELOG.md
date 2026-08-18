@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.1 — 2026-08-18
+
+Fixes external links doing nothing on devices with more than one browser
+installed, which blocked the new sign-in flow.
+
+### Fixed
+- **Links now open.** `MainActivity` carried `android:taskAffinity=""` (present
+  since 1.0.0 but never exercised, because 1.x only copied links to the
+  clipboard). With no task affinity, a browser launched from the "Open with"
+  chooser started in its own task without being brought to the foreground — the
+  button appeared to do nothing. Removed the empty affinity.
+- Links now prefer an in-app browser tab (Custom Tabs), which needs no task
+  switch and skips the "Open with" chooser entirely, falling back to an external
+  browser and then to copying the link. This covers every link in the app,
+  including the device-flow verification page.
+- "Save & sign in" no longer clips its label at larger system font scales.
+
 ## 2.0.0 — 2026-08-17
 
 A ground-up overhaul: JekyllPress now works with any Jekyll site on GitHub, not

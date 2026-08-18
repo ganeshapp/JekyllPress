@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
 import '../../../core/providers/config_provider.dart';
@@ -22,6 +21,7 @@ import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/frontmatter_parser.dart';
 import '../../../l10n/l10n.dart';
+import '../../../core/utils/external_url.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
   final BlogPost? post;
@@ -470,12 +470,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   /// Open [url] in the external browser (best-effort, no context needed
   /// after pop - errors are silently ignored)
-  void _launchExternal(String url) {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    launchUrl(uri, mode: LaunchMode.externalApplication)
-        .catchError((_) => false);
-  }
+  void _launchExternal(String url) => openExternalUrlUnawaited(url);
 
   /// True only when connectivity_plus is POSITIVE there is no network.
   /// Any uncertainty returns false and lets the request itself decide.
