@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/github_app_config.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/github_oauth_service.dart';
@@ -18,9 +19,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
-  /// Compile-time default GitHub App / OAuth App client id
-  /// (--dart-define=GITHUB_CLIENT_ID=Iv1.xxx). Empty when not provided.
-  static const _envClientId = String.fromEnvironment('GITHUB_CLIENT_ID');
+  /// Client id bundled with the app (see [GitHubAppConfig]). When set, the
+  /// user never sees the setup card at all.
+  static const _envClientId = GitHubAppConfig.bundledClientId;
 
   /// GitHub's new-app form, pre-filled via its documented URL parameters so
   /// the user only has to tick "Enable Device Flow" (the one setting GitHub
@@ -127,15 +128,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _startDeviceFlow(String clientId) async {
-    final tokens = await showModalBottomSheet<OAuthTokens>(
+    final result = await showModalBottomSheet<_DeviceFlowResult>(
       context: context,
       isScrollControlled: true,
       isDismissible: false,
       enableDrag: false,
       builder: (context) => _DeviceFlowSheet(clientId: clientId),
     );
-    if (tokens == null || !mounted) return;
+    if (result == null || !mounted) return;
 
+    // A rejected client id (e.g. Device Flow not enabled on the app) would
+    // otherwise dead-end here: the stored id keeps failing and the setup card
+    // is unreachable. Reopen it with the current id ready to edit.
+    if (result is _DeviceFlowChangeClientId) {
+      _clientIdController.text = clientId;
+      setState(() => _showSetupCard = true);
+      return;
+    }
+
+    final tokens = (result as _DeviceFlowSuccess).tokens;
     final success = await ref
         .read(authNotifierProvider.notifier)
         .completeDeviceLogin(tokens: tokens, clientId: clientId);
@@ -572,6 +583,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 /// (auto-copied), opens github.com/login/device, and polls until the user
 /// authorizes, cancels, or the code expires. Pops with the [OAuthTokens]
 /// on success, null otherwise.
+/// Outcome of the device-flow sheet.
+sealed class _DeviceFlowResult {
+  const _DeviceFlowResult();
+}
+
+class _DeviceFlowSuccess extends _DeviceFlowResult {
+  const _DeviceFlowSuccess(this.tokens);
+  final OAuthTokens tokens;
+}
+
+/// The user wants to correct the client id rather than retry with this one.
+class _DeviceFlowChangeClientId extends _DeviceFlowResult {
+  const _DeviceFlowChangeClientId();
+}
+
 class _DeviceFlowSheet extends ConsumerStatefulWidget {
   final String clientId;
 
@@ -604,7 +630,10 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
   Future<void> _run() async {
     final oauthService = ref.read(gitHubOAuthServiceProvider);
     try {
-      final code = await oauthService.startDeviceFlow(widget.clientId);
+      final code = await oauthService.startDeviceFlow(
+        widget.clientId,
+        scope: GitHubAppConfig.scope,
+      );
       if (!mounted || _cancelled) return;
       setState(() => _code = code);
       // Save the user a copy step: the code is on the clipboard already
@@ -621,7 +650,7 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
 
       switch (result) {
         case DeviceFlowSuccess(tokens: final tokens):
-          Navigator.of(context).pop(tokens);
+          Navigator.of(context).pop(_DeviceFlowSuccess(tokens));
         case DeviceFlowCancelled():
           break; // The cancel button already closed the sheet
         case DeviceFlowExpired(message: final message):
@@ -836,12 +865,20 @@ class _DeviceFlowSheetState extends ConsumerState<_DeviceFlowSheet> {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _cancel,
-            child: Text(context.l10n.commonClose),
+        ElevatedButton(
+          onPressed: _cancel,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
           ),
+          child: Text(context.l10n.commonClose),
+        ),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: () {
+            _cancelled = true;
+            Navigator.of(context).pop(const _DeviceFlowChangeClientId());
+          },
+          child: Text(context.l10n.changeClientId),
         ),
       ],
     );

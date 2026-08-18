@@ -946,4 +946,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appNameTakenHint => 'If GitHub says the name is taken, add something to make it unique.';
+
+  @override
+  String get changeClientId => 'Change Client ID';
 }
