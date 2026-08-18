@@ -50,7 +50,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get oneTimeSetupTitle => 'One-time setup';
 
   @override
-  String get oneTimeSetupBody => 'Signing in without a token requires a free GitHub App you register once on your account. Give it the Contents: Read & write permission and enable Device Flow, then paste its Client ID here - JekyllPress remembers it forever.';
+  String get oneTimeSetupBody => 'Signing in without a token needs a free GitHub App on your account. The button below opens GitHub with everything pre-filled - you only have to tick \"Enable Device Flow\", then press Create GitHub App. Copy the Client ID it shows you into the box below.';
 
   @override
   String get openGitHubAppSetup => 'Open GitHub App setup';
@@ -940,4 +940,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String linkCopiedSnack(String url) {
     return 'Link copied: $url';
   }
+
+  @override
+  String get oneTimeSetupInstallHint => 'Last step: on your new app\'s page, open \"Install App\" and give it access to your blog repository.';
+
+  @override
+  String get appNameTakenHint => 'If GitHub says the name is taken, add something to make it unique.';
 }

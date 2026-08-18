@@ -22,7 +22,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   /// (--dart-define=GITHUB_CLIENT_ID=Iv1.xxx). Empty when not provided.
   static const _envClientId = String.fromEnvironment('GITHUB_CLIENT_ID');
 
-  static const _appSetupUrl = 'https://github.com/settings/apps/new';
+  /// GitHub's new-app form, pre-filled via its documented URL parameters so
+  /// the user only has to tick "Enable Device Flow" (the one setting GitHub
+  /// exposes no parameter for) and press Create. Without this the form asks
+  /// for a webhook URL, redirect URIs, and permissions that JekyllPress does
+  /// not use.
+  static const _appSetupUrl =
+      'https://github.com/settings/apps/new'
+      '?name=JekyllPress'
+      '&description=Write%20and%20publish%20posts%20to%20my%20Jekyll%20blog%20from%20my%20phone'
+      '&url=https%3A%2F%2Fgithub.com%2Fganeshapp%2FJekyllPress'
+      '&public=false'
+      '&webhook_active=false'
+      '&contents=write';
   static const _createTokenUrl =
       'https://github.com/settings/tokens/new?scopes=repo&description=JekyllPress';
 
@@ -314,6 +326,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   height: 1.6,
                 ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            context.l10n.appNameTakenHint,
+            style: context.textTheme.bodySmall,
+          ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: isLoading ? null : () => _openUrl(_appSetupUrl),
@@ -325,6 +342,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            context.l10n.oneTimeSetupInstallHint,
+            style: context.textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
           TextField(
