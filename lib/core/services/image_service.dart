@@ -50,6 +50,24 @@ class ImageService {
   /// contents-API PUT slow/OOM-prone, so uploads are refused above it
   static const int maxVideoUploadBytes = 25 * 1024 * 1024;
 
+  /// Longest edge of an uploaded image, in pixels.
+  ///
+  /// Applied by image_picker, whose maxWidth/maxHeight ARE a bounding box:
+  /// the image is scaled so neither side exceeds them, preserving aspect
+  /// ratio and honouring EXIF orientation on the platform side.
+  ///
+  /// flutter_image_compress cannot do this. Its minWidth/minHeight are
+  /// MINIMUMS on both axes - it computes
+  /// `scale = max(1, min(w / minWidth, h / minHeight))` - so passing the same
+  /// number twice pins the SHORT edge, not the long one. That is why asking
+  /// it for "1080" here used to emit images about 1620px on their long edge,
+  /// and a workflow in the site repo was quietly resizing them afterwards.
+  static const double maxImageEdge = 1600;
+
+  /// Large enough that flutter_image_compress's scale factor stays at 1, so
+  /// the compress pass only re-encodes and never resizes.
+  static const int _noResize = 100000;
+
   /// Directory for storing local media. The physical name stays
   /// 'local_images' so files from pre-video builds are still found.
   Future<Directory> get _localMediaDir async {
@@ -66,6 +84,8 @@ class ImageService {
   Future<ProcessedMedia?> pickAndProcessImage() async {
     final XFile? pickedFile = await _picker.pickImage(
       source: ImageSource.gallery,
+      maxWidth: maxImageEdge,
+      maxHeight: maxImageEdge,
       requestFullMetadata: false, // Skip EXIF to improve privacy
     );
 
@@ -78,6 +98,8 @@ class ImageService {
   Future<ProcessedMedia?> captureAndProcessImage() async {
     final XFile? pickedFile = await _picker.pickImage(
       source: ImageSource.camera,
+      maxWidth: maxImageEdge,
+      maxHeight: maxImageEdge,
       requestFullMetadata: false,
     );
 
@@ -152,12 +174,14 @@ class ImageService {
     );
     final destPath = path.join(mediaDir.path, filename);
 
-    // Compress image
-    // Max 1080px width, 85% quality, strip EXIF
+    // Re-encode to JPEG at quality 85 and drop EXIF. The picker has already
+    // bounded the dimensions, so this pass must NOT resize again - hence the
+    // deliberately huge minWidth/minHeight, which keep the plugin's scale
+    // factor pinned at 1.
     final compressedBytes = await FlutterImageCompress.compressWithFile(
       sourceFile.absolute.path,
-      minWidth: 1080,
-      minHeight: 1080,
+      minWidth: _noResize,
+      minHeight: _noResize,
       quality: 85,
       keepExif: false, // Strip EXIF data
       format: CompressFormat.jpeg,
