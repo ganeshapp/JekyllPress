@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.1 — 2026-08-18
+
+### Fixed
+- **Tapping an earlier line could select everything back to the caret instead
+  of moving it.** Flutter treats a tap as "extend the selection to here"
+  whenever it believes Shift is held, and that state can get stuck on a device
+  — a paired Bluetooth keyboard, or an IME that emits a Shift press without a
+  matching release. In a long post every tap then swallowed the text in
+  between. A tap in the editor now always places the caret where you tapped.
+  Double-tap-to-select-word and long-press selection are unaffected.
+
+  Note: this could not be reproduced on a stock Android emulator, so it is a
+  guard against the known cause of that symptom rather than a confirmed
+  root-cause fix. If it persists, the cause is elsewhere on the device.
+
 ## 2.1.0 — 2026-08-18
 
 Signing in no longer requires registering anything on GitHub.

@@ -1125,6 +1125,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  /// Force a plain tap to place the caret instead of extending a selection.
+  ///
+  /// Flutter treats a tap as "extend selection to here" whenever it believes
+  /// Shift is held. On some devices that state gets stuck - a paired
+  /// Bluetooth keyboard, or an IME that emits a Shift press without a
+  /// matching release - and then every tap in a long post selects everything
+  /// between the old caret and the tap. There is no shift-tap gesture to
+  /// preserve on a touch-only writing surface, so a single tap always
+  /// collapses to where the user actually tapped (the extent).
+  ///
+  /// Runs after the framework has set the selection. Double-tap-to-select-word
+  /// is unaffected: [TextField.onTap] only fires on the first tap of a series.
+  void _collapseCaretAfterTap() {
+    final selection = _bodyController.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+    _bodyController.selection =
+        TextSelection.collapsed(offset: selection.extentOffset);
+  }
+
   void _insertTextAtCursor(String text) {
     final value = _bodyController.value;
     final selection = value.selection;
@@ -1520,6 +1539,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 maxLines: null,
                 minLines: null,
                 textAlignVertical: TextAlignVertical.top,
+                onTap: _collapseCaretAfterTap,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
                 textCapitalization: TextCapitalization.sentences,
