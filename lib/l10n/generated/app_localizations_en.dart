@@ -783,6 +783,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addVideoTooltip => 'Add video';
 
   @override
+  String get addYouTubeTooltip => 'Add YouTube video';
+
+  @override
+  String get addYouTubeTitle => 'Add YouTube Video';
+
+  @override
+  String get youTubeLinkHint => 'Paste a YouTube link';
+
+  @override
+  String get notAYouTubeLink => 'Not a YouTube video link';
+
+  @override
+  String get insertAction => 'Insert';
+
+  @override
   String get markdownHelpTooltip => 'Markdown help';
 
   @override

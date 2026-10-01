@@ -1473,6 +1473,36 @@ abstract class AppLocalizations {
   /// **'Add video'**
   String get addVideoTooltip;
 
+  /// Tooltip of the insert-YouTube-video toolbar button
+  ///
+  /// In en, this message translates to:
+  /// **'Add YouTube video'**
+  String get addYouTubeTooltip;
+
+  /// Title of the dialog asking for a YouTube link
+  ///
+  /// In en, this message translates to:
+  /// **'Add YouTube Video'**
+  String get addYouTubeTitle;
+
+  /// Hint of the link field in the YouTube dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Paste a YouTube link'**
+  String get youTubeLinkHint;
+
+  /// Inline error when the YouTube dialog's input is not a recognised video link
+  ///
+  /// In en, this message translates to:
+  /// **'Not a YouTube video link'**
+  String get notAYouTubeLink;
+
+  /// Confirm button of the YouTube dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Insert'**
+  String get insertAction;
+
   /// Tooltip of the markdown reference toolbar button
   ///
   /// In en, this message translates to:

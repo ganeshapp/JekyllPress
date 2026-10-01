@@ -6,6 +6,7 @@ import '../models/app_config.dart';
 import '../services/dio_client.dart';
 import '../services/github_upload_service.dart';
 import '../services/image_service.dart';
+import '../utils/youtube.dart';
 import 'config_provider.dart';
 
 part 'image_provider.g.dart';
@@ -235,24 +236,31 @@ class ImageManager extends _$ImageManager {
 /// would be lowercased by Uri.parse)
 const String videoPreviewScheme = 'jekyllpress-video';
 
-/// Matches a raw HTML <video> block, optionally wrapped in a <div>
-final RegExp _videoBlockPattern = RegExp(
-  r'(?:<div[^>]*>\s*)?<video[^>]*>[\s\S]*?</video>(?:\s*</div>)?',
+/// Matches a raw HTML <video> or <iframe> block, optionally wrapped in a
+/// <div>
+final RegExp _embedBlockPattern = RegExp(
+  r'(?:<div[^>]*>\s*)?<(video|iframe)[^>]*>[\s\S]*?</\1>(?:\s*</div>)?',
   caseSensitive: false,
 );
 
-/// flutter_markdown does not render raw HTML, so <video> embeds show as
-/// literal text in the preview. Replace each block with a synthetic image
-/// whose URI carries the video filename; the preview's image builder
-/// renders it as a video placeholder card.
+/// flutter_markdown does not render raw HTML, so embeds show as literal
+/// text in the preview. Replace each <video> block with a synthetic image
+/// whose URI carries the video filename, and each YouTube <iframe> with
+/// one carrying the video id (alt `youtube`); the preview's image builder
+/// renders them as placeholder cards. Other iframes are left as they are.
 String preprocessPreviewMarkdown(String markdown) {
-  return markdown.replaceAllMapped(_videoBlockPattern, (match) {
+  return markdown.replaceAllMapped(_embedBlockPattern, (match) {
     final block = match.group(0)!;
     final src = RegExp(r'''src\s*=\s*["']([^"']+)["']''')
         .firstMatch(block)
         ?.group(1);
-    final filename = src?.split('/').last ?? '';
-    return '![video]($videoPreviewScheme:/$filename)';
+    if (match.group(1)!.toLowerCase() == 'video') {
+      final filename = src?.split('/').last ?? '';
+      return '![video]($videoPreviewScheme:/$filename)';
+    }
+    final video = parseYouTubeUrl(src ?? '');
+    if (video == null) return block;
+    return '![youtube]($videoPreviewScheme:/${video.id})';
   });
 }
 

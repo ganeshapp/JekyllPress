@@ -67,6 +67,7 @@ REST API — no clone, no git commands, no merge conflicts.
   stripped, uploaded to your assets folder, markdown inserted automatically.
 - **Videos**: re-encoded to H.264 with the short edge capped at 640px (25MB
   upload cap) and embedded with an HTML5 `<video>` snippet.
+- **YouTube**: paste a watch, youtu.be, Shorts or live link to embed the player.
 - **Jekyll drafts**: save to `_drafts` on GitHub, promote to post later.
 - **Local drafts & autosave**: every keystroke is safe; resume or discard on
   reopen.
