@@ -23,35 +23,40 @@ final _timePattern = RegExp(
 /// Recognise a link to a single YouTube video (watch, youtu.be, shorts,
 /// embed or live; scheme optional). Null for anything else.
 YouTubeVideo? parseYouTubeUrl(String input) {
-  final text = input.trim();
-  final uri = Uri.tryParse(
-    text.startsWith(RegExp('https?://', caseSensitive: false))
-        ? text
-        : 'https://$text',
-  );
-  if (uri == null || uri.userInfo.isNotEmpty) return null;
+  try {
+    final text = input.trim();
+    final uri = Uri.tryParse(
+      text.startsWith(RegExp('https?://', caseSensitive: false))
+          ? text
+          : 'https://$text',
+    );
+    if (uri == null || uri.userInfo.isNotEmpty) return null;
 
-  final path = uri.pathSegments.where((s) => s.isNotEmpty).toList();
-  String? id;
-  var isShort = false;
-  if (uri.host == 'youtu.be' && path.length == 1) {
-    id = path[0];
-  } else if (_hosts.contains(uri.host)) {
-    if (path.length == 1 && path[0] == 'watch') {
-      id = uri.queryParameters['v'];
-    } else if (path.length == 2 && _idPrefixes.contains(path[0])) {
-      id = path[1];
-      isShort = path[0] == 'shorts';
+    final path = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    String? id;
+    var isShort = false;
+    if (uri.host == 'youtu.be' && path.length == 1) {
+      id = path[0];
+    } else if (_hosts.contains(uri.host)) {
+      if (path.length == 1 && path[0] == 'watch') {
+        id = uri.queryParameters['v'];
+      } else if (path.length == 2 && _idPrefixes.contains(path[0])) {
+        id = path[1];
+        isShort = path[0] == 'shorts';
+      }
     }
-  }
-  if (id == null || !_idPattern.hasMatch(id)) return null;
+    if (id == null || !_idPattern.hasMatch(id)) return null;
 
-  final time = _timePattern.firstMatch(
-    uri.queryParameters['t'] ?? uri.queryParameters['start'] ?? '',
-  );
-  int part(int group) => int.parse(time?.group(group) ?? '0');
-  final start = part(1) * 3600 + part(2) * 60 + part(3);
-  return (id: id, isShort: isShort, start: start > 0 ? start : null);
+    final time = _timePattern.firstMatch(
+      uri.queryParameters['t'] ?? uri.queryParameters['start'] ?? '',
+    );
+    int part(int group) => int.parse(time?.group(group) ?? '0');
+    final start = part(1) * 3600 + part(2) * 60 + part(3);
+    return (id: id, isShort: isShort, start: start > 0 ? start : null);
+  } on FormatException {
+    // pathSegments and queryParameters throw on malformed %-escapes
+    return null;
+  }
 }
 
 /// The player snippet for a post. Shorts get a portrait frame capped at

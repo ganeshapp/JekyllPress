@@ -130,6 +130,7 @@ void main() {
     test('leaves other iframes untouched', () {
       const markdown = '<div class="map">\n'
           '  <iframe src="https://www.google.com/maps/embed?pb=1"></iframe>\n'
+          '  <iframe src="https://example.com/caf%E9/embed"></iframe>\n'
           '</div>';
       expect(preprocessPreviewMarkdown(markdown), markdown);
     });

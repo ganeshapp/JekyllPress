@@ -5,6 +5,12 @@
 ### Added
 - **Add YouTube video** toolbar button: paste a link to embed the player.
 
+### Fixed
+- An uploaded video inserted mid-paragraph now gets blank lines around it,
+  so kramdown treats the embed as an HTML block.
+- The editor toolbar fits on 393dp+ phones and scrolls instead of
+  overflowing on narrower ones.
+
 ## 2.1.1 — 2026-08-18
 
 ### Fixed

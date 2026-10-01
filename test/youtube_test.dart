@@ -94,6 +94,10 @@ void main() {
         'https://www.youtube.com/@somechannel',
         'https://www.youtube.com/shorts/',
         'https://youtu.be/$id/extra',
+        // Malformed %-escapes must not throw
+        'https://youtu.be/%FF',
+        'https://example.com/caf%E9',
+        'https://youtu.be/$id?t=%FF',
       };
       for (final input in rejected) {
         expect(parseYouTubeUrl(input), isNull, reason: input);

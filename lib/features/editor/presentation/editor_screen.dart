@@ -1802,8 +1802,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
                 ),
                 child: MarkdownBody(
-                  // Raw <video> HTML blocks become placeholder "images"
-                  // routed to _buildVideoPlaceholder via the builder below
+                  // Raw <video> and YouTube <iframe> blocks become placeholder
+                  // "images" routed to _buildVideoPlaceholder via the builder
                   data: preprocessPreviewMarkdown(editorState.bodyContent),
                   selectable: true,
                   styleSheet: _buildMarkdownStyleSheet(),
@@ -1827,7 +1827,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (uri.scheme == videoPreviewScheme) {
       return _buildVideoPlaceholder(
         filename,
-        youTubeId: alt == 'youtube' ? filename : null,
+        isYouTube: alt == youTubePreviewAlt,
       );
     }
 
@@ -1880,9 +1880,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   /// Rounded card standing in for a raw-HTML <video> embed: play badge,
-  /// filename, and the same upload overlays as images. A YouTube embed
-  /// shows its thumbnail instead of the filename and opens on tap.
-  Widget _buildVideoPlaceholder(String filename, {String? youTubeId}) {
+  /// filename, and the same upload overlays as images. For a YouTube embed
+  /// [filename] is the video id: it shows the thumbnail and opens on tap.
+  Widget _buildVideoPlaceholder(String filename, {bool isYouTube = false}) {
     final label =
         filename.isEmpty ? context.l10n.videoFallbackLabel : filename;
 
@@ -1906,16 +1906,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   border: Border.all(
                     color: context.colorScheme.outline.withAlpha(100),
                   ),
-                  image: youTubeId == null
-                      ? null
-                      : DecorationImage(
+                  image: isYouTube
+                      ? DecorationImage(
                           image: NetworkImage(
-                            'https://i.ytimg.com/vi/$youTubeId/hqdefault.jpg',
+                            'https://i.ytimg.com/vi/$filename/hqdefault.jpg',
                           ),
                           fit: BoxFit.cover,
                           // Offline: the bare card still reads as a video
                           onError: (_, __) {},
-                        ),
+                        )
+                      : null,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1932,7 +1932,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         color: context.colorScheme.primary,
                       ),
                     ),
-                    if (youTubeId == null) ...[
+                    if (!isYouTube) ...[
                       const SizedBox(height: 12),
                       Text(
                         label,
@@ -1946,11 +1946,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ],
                 ),
               ),
-              if (youTubeId != null)
+              if (isYouTube)
                 Positioned.fill(
                   child: GestureDetector(
                     onTap: () => _launchExternal(
-                      'https://www.youtube.com/watch?v=$youTubeId',
+                      'https://www.youtube.com/watch?v=$filename',
                     ),
                   ),
                 ),
@@ -2775,7 +2775,7 @@ class _ToolbarButton extends StatelessWidget {
         onTap: onPressed,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: context.colorScheme.outline.withAlpha(60),
             borderRadius: BorderRadius.circular(8),

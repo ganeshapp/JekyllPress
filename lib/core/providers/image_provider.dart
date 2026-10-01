@@ -236,6 +236,9 @@ class ImageManager extends _$ImageManager {
 /// would be lowercased by Uri.parse)
 const String videoPreviewScheme = 'jekyllpress-video';
 
+/// Alt text marking a [videoPreviewScheme] placeholder as a YouTube id
+const String youTubePreviewAlt = 'youtube';
+
 /// Matches a raw HTML <video> or <iframe> block, optionally wrapped in a
 /// <div>
 final RegExp _embedBlockPattern = RegExp(
@@ -260,7 +263,7 @@ String preprocessPreviewMarkdown(String markdown) {
     }
     final video = parseYouTubeUrl(src ?? '');
     if (video == null) return block;
-    return '![youtube]($videoPreviewScheme:/${video.id})';
+    return '![$youTubePreviewAlt]($videoPreviewScheme:/${video.id})';
   });
 }
 
