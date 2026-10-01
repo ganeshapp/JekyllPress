@@ -27,6 +27,11 @@ touches anything except your device and GitHub.
 Device backups are disabled for the app (`android:allowBackup="false"`), so
 none of this data is copied into Android or cloud backups.
 
+On macOS and Linux the token and Client ID live in the login keychain (macOS)
+or the Secret Service keyring (Linux, e.g. GNOME Keyring), and everything else
+in the app's own folder: `~/Library/Application Support/com.jekyllpress.jekyllpress`
+or `~/.local/share/com.jekyllpress.jekyllpress`.
+
 ## What leaves your device
 
 The app talks **only to GitHub**:

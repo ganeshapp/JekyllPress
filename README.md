@@ -43,11 +43,35 @@ I use AI to help me code. But I review all the edits.
 
 ## Download
 
-**[Download Latest APK](https://github.com/ganeshapp/JekyllPress/releases/latest)** (Android only)
+**[Download Latest APK](https://github.com/ganeshapp/JekyllPress/releases/latest)** (Android).
+The same release has macOS and Linux downloads, see
+[Desktop](#desktop-macos--linux).
 
 Nothing to register: install it, tap **Sign in with GitHub**, approve the code
 on github.com, and pick your blog repository. Details in
 [Signing in](#signing-in).
+
+### Desktop (macOS / Linux)
+
+Each release also carries `jekyllpress-<version>-macos.dmg`,
+`jekyllpress-<version>-linux-x64.deb` and `jekyllpress-<version>-linux-x64.tar.gz`.
+
+- **macOS 10.15+** (Apple silicon and Intel): open the DMG and drag
+  JekyllPress to Applications. The app is ad-hoc signed, not notarized, so
+  macOS blocks the first launch: dismiss the dialog, then click **Open Anyway**
+  in System Settings → Privacy & Security. Or run
+  `xattr -dr com.apple.quarantine /Applications/JekyllPress.app`. After each
+  update expect that step again, plus one keychain "Always Allow" prompt per
+  stored sign-in item.
+- **Ubuntu 24.04+ / Debian 13+**: `sudo apt install ./jekyllpress-<version>-linux-x64.deb`
+  (use `apt`, not `dpkg -i`, so dependencies are pulled in). Other distros:
+  extract the `.tar.gz` and run `jekyllpress/jekyllpress`; it needs GTK 3 and
+  libsecret. Signing in needs a Secret Service keyring: GNOME Keyring
+  (Ubuntu's default) or KWallet.
+
+What differs from Android: there is no camera, images come from a file dialog
+and are resized and stripped of EXIF by the app (JPEG, PNG, WebP and the like;
+HEIC is not supported), and video upload is macOS only.
 
 ---
 
@@ -127,7 +151,8 @@ read/write on your blog repo) and paste it into the login screen's
 you want to hand JekyllPress access to exactly one repository.
 
 Either way, the credential is stored in Android's Keystore-backed encrypted
-storage and only ever sent to GitHub. See [PRIVACY.md](PRIVACY.md).
+storage (on desktop: the macOS keychain or the Linux Secret Service) and only
+ever sent to GitHub. See [PRIVACY.md](PRIVACY.md).
 
 ### Using your own OAuth App or GitHub App (forks, self-builders)
 
@@ -178,7 +203,7 @@ confirm:
 
 ## Tech Stack
 
-* **Framework:** [Flutter](https://flutter.dev) (Android target)
+* **Framework:** [Flutter](https://flutter.dev) (Android, macOS and Linux targets)
 * **State Management:** [Riverpod](https://riverpod.dev) (codegen)
 * **Networking:** [Dio](https://pub.dev/packages/dio) — one shared authenticated client
 * **Local DB:** [Hive](https://docs.hivedb.dev/) (posts cache, drafts, config, publish queue)
@@ -206,6 +231,7 @@ flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 flutter run            # debug on a connected device
 flutter build apk      # release APK
+flutter build macos    # or linux (needs the GTK and libsecret dev packages)
 # optional: use your own OAuth App / GitHub App instead of the bundled one
 flutter build apk --dart-define=GITHUB_CLIENT_ID=Ov23xxxxxxxxxxxxxxxx
 ```
