@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.0 — 2026-10-02
 
 ### Added
 - **Add YouTube video** toolbar button: paste a link to embed the player.
