@@ -64,10 +64,10 @@ Each release also carries `jekyllpress-<version>-macos.dmg`,
   update expect that step again, plus one keychain "Always Allow" prompt per
   stored sign-in item.
 - **Ubuntu 24.04+ / Debian 13+**: `sudo apt install ./jekyllpress-<version>-linux-x64.deb`
-  (use `apt`, not `dpkg -i`, so dependencies are pulled in). Other distros:
-  extract the `.tar.gz` and run `jekyllpress/jekyllpress`; it needs GTK 3 and
-  libsecret. Signing in needs a Secret Service keyring: GNOME Keyring
-  (Ubuntu's default) or KWallet.
+  (use `apt`, not `dpkg -i`, so dependencies are pulled in). Other distros
+  with glibc 2.39+ (2024 or newer, e.g. Fedora 40+): extract the `.tar.gz` and
+  run `jekyllpress/jekyllpress`; it needs GTK 3 and libsecret. Signing in needs
+  a Secret Service keyring: GNOME Keyring (Ubuntu's default) or KWallet.
 
 What differs from Android: there is no camera, images come from a file dialog
 and are resized and stripped of EXIF by the app (JPEG, PNG, WebP and the like;

@@ -69,12 +69,7 @@ class JekyllPressApp extends ConsumerWidget {
             systemNavigationBarColor: scheme.surface,
             systemNavigationBarIconBrightness: iconBrightness,
           ),
-          // Desktop: keep lines readable in a wide window
-          child: isDesktop
-              ? ColoredBox(
-                  color: scheme.surface,
-                  child: Center(child: SizedBox(width: 900, child: child)))
-              : child ?? const SizedBox.shrink(),
+          child: child ?? const SizedBox.shrink(),
         );
       },
       home: const AuthWrapper(),

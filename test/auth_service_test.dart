@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jekyllpress/core/services/auth_service.dart';
 import 'package:jekyllpress/core/services/github_oauth_service.dart';
@@ -16,6 +17,16 @@ void main() {
     test('no stored token returns AuthFailure (login screen path)', () async {
       final service = AuthService(
         secureStorage: FakeSecureStorage(),
+        dio: dioWithResponse((_) => jsonResponse(_userJson, 200)),
+      );
+
+      expect(await service.checkExistingAuth(), isA<AuthFailure>());
+    });
+
+    test('unreadable keyring returns AuthFailure, not a stuck splash',
+        () async {
+      final service = AuthService(
+        secureStorage: _LockedKeyring(),
         dio: dioWithResponse((_) => jsonResponse(_userJson, 200)),
       );
 
@@ -216,4 +227,12 @@ void main() {
       expect(storage.clientId, isNull);
     });
   });
+}
+
+/// Linux with no Secret Service, or a keyring unlock the user cancelled:
+/// flutter_secure_storage_linux throws on every read
+class _LockedKeyring extends FakeSecureStorage {
+  @override
+  Future<bool> hasToken() async =>
+      throw PlatformException(code: 'Libsecret error');
 }

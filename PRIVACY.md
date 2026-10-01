@@ -30,7 +30,8 @@ none of this data is copied into Android or cloud backups.
 On macOS and Linux the token and Client ID live in the login keychain (macOS)
 or the Secret Service keyring (Linux, e.g. GNOME Keyring), and everything else
 in the app's own folder: `~/Library/Application Support/com.jekyllpress.jekyllpress`
-or `~/.local/share/com.jekyllpress.jekyllpress`.
+or `~/.local/share/jekyllpress` (`~/.local/share/com.jekyllpress.jekyllpress`
+where the GLib development package is installed).
 
 ## What leaves your device
 

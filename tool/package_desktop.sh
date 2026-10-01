@@ -9,7 +9,7 @@ NAME=JekyllPress                          # what the menu shows; the macOS .app
 ID=com.jekyllpress.jekyllpress            # bundle id == Linux APPLICATION_ID
 ICON=linux/packaging/jekyllpress_512.png  # 512x512
 SUMMARY="A CMS for GitHub Pages (Jekyll) blogs"
-CATEGORIES="Office;TextEditor;"
+CATEGORIES="Office;"
 # From the checked-out pubspec, so the file names match the app inside them.
 VERSION=$(grep '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//' | cut -d+ -f1)
 OUT=build/dist

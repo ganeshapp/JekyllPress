@@ -1002,7 +1002,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             // Background is overridden: take the foreground from onError so
             // the message stays readable in both themes
             content: Text(
-              context.l10n.failedToAddImage('$e'),
+              context.l10n.failedToAddImage(
+                  e is FormatException ? e.message : '$e'),
               style: TextStyle(color: context.colorScheme.onError),
             ),
             behavior: SnackBarBehavior.floating,
@@ -1160,8 +1161,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   /// Bluetooth keyboard, or an IME that emits a Shift press without a
   /// matching release - and then every tap in a long post selects everything
   /// between the old caret and the tap. There is no shift-tap gesture to
-  /// preserve on a touch-only writing surface, so a single tap always
-  /// collapses to where the user actually tapped (the extent).
+  /// preserve on a phone, so a single tap always collapses to where the user
+  /// actually tapped (the extent). Desktop skips it to keep shift-click.
   ///
   /// Runs after the framework has set the selection. Double-tap-to-select-word
   /// is unaffected: [TextField.onTap] only fires on the first tap of a series.
@@ -1228,28 +1229,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         body: Container(
           decoration: AppTheme.backgroundGradient(context),
           child: SafeArea(
-            child: Column(
-              children: [
-                _buildAppBar(),
-                _buildTabBar(),
-                Expanded(
-                  // IndexedStack keeps both tabs alive so Write scroll
-                  // position, undo history, and Preview scroll survive
-                  // tab switches
-                  child: ListenableBuilder(
-                    listenable: _tabController,
-                    builder: (context, _) {
-                      return IndexedStack(
-                        index: _tabController.index,
-                        children: [
-                          _buildWriteTab(),
-                          _buildPreviewTab(),
-                        ],
-                      );
-                    },
-                  ),
+            // Desktop: keep lines readable in a wide window
+            child: Center(
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxWidth: isDesktop ? 900 : double.infinity),
+                child: Column(
+                  children: [
+                    _buildAppBar(),
+                    _buildTabBar(),
+                    Expanded(
+                      // IndexedStack keeps both tabs alive so Write scroll
+                      // position, undo history, and Preview scroll survive
+                      // tab switches
+                      child: ListenableBuilder(
+                        listenable: _tabController,
+                        builder: (context, _) {
+                          return IndexedStack(
+                            index: _tabController.index,
+                            children: [
+                              _buildWriteTab(),
+                              _buildPreviewTab(),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1499,7 +1507,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               textCapitalization: TextCapitalization.words,
               textInputAction: TextInputAction.next,
               onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-              spellCheckConfiguration: const SpellCheckConfiguration(),
+              // Desktop has no spell check service; debug builds log an error
+              spellCheckConfiguration:
+                  isDesktop ? null : const SpellCheckConfiguration(),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -1584,11 +1594,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 maxLines: null,
                 minLines: null,
                 textAlignVertical: TextAlignVertical.top,
-                onTap: _collapseCaretAfterTap,
+                onTap: isDesktop ? null : _collapseCaretAfterTap,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
                 textCapitalization: TextCapitalization.sentences,
-                spellCheckConfiguration: const SpellCheckConfiguration(),
+                spellCheckConfiguration:
+                    isDesktop ? null : const SpellCheckConfiguration(),
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.6,
@@ -1680,13 +1691,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       },
                     ),
                     const SizedBox(width: 6),
-                    // Keyboard dismiss button
-                    _ToolbarButton(
-                      icon: Icons.keyboard_hide_rounded,
-                      tooltip: context.l10n.hideKeyboardTooltip,
-                      onPressed: () => FocusScope.of(context).unfocus(),
-                    ),
-                    const SizedBox(width: 6),
+                    // Keyboard dismiss button (no on-screen keyboard on desktop)
+                    if (!isDesktop) ...[
+                      _ToolbarButton(
+                        icon: Icons.keyboard_hide_rounded,
+                        tooltip: context.l10n.hideKeyboardTooltip,
+                        onPressed: () => FocusScope.of(context).unfocus(),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                     // Add Image button
                     _ToolbarButton(
                       icon: Icons.image_rounded,
