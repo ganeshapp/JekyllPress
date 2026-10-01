@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:jekyllpress/core/models/app_config.dart';
 import 'package:jekyllpress/core/providers/image_provider.dart';
+import 'package:jekyllpress/core/utils/youtube.dart';
 
 void main() {
   group('normalizeBaseurl', () {
@@ -95,6 +96,42 @@ void main() {
     test('leaves markdown without video blocks untouched', () {
       const markdown = '# Title\n\nSome *text* and ![img](/assets/x.jpg)\n\n'
           '<div>plain html without video</div>';
+      expect(preprocessPreviewMarkdown(markdown), markdown);
+    });
+
+    test('replaces generated YouTube embeds with a placeholder', () {
+      final regular =
+          youTubeEmbed((id: 'dQw4w9WgXcQ', isShort: false, start: 90));
+      final short =
+          youTubeEmbed((id: 'aBcDeFgHiJk', isShort: true, start: null));
+
+      expect(
+        preprocessPreviewMarkdown('intro\n\n$regular\n\nmiddle\n\n$short'),
+        'intro\n\n![youtube](jekyllpress-video:/dQw4w9WgXcQ)\n\n'
+        'middle\n\n![youtube](jekyllpress-video:/aBcDeFgHiJk)',
+      );
+    });
+
+    test("replaces YouTube's own embed code with a placeholder", () {
+      const markdown = '<iframe width="560" height="315" '
+          'src="https://www.youtube.com/embed/dQw4w9WgXcQ?si=AbCdEf&amp;start=42" '
+          'title="YouTube video player" frameborder="0" '
+          'allow="accelerometer; autoplay; clipboard-write; encrypted-media; '
+          'gyroscope; picture-in-picture; web-share" '
+          'referrerpolicy="strict-origin-when-cross-origin" '
+          'allowfullscreen></iframe>';
+
+      expect(
+        preprocessPreviewMarkdown(markdown),
+        '![youtube](jekyllpress-video:/dQw4w9WgXcQ)',
+      );
+    });
+
+    test('leaves other iframes untouched', () {
+      const markdown = '<div class="map">\n'
+          '  <iframe src="https://www.google.com/maps/embed?pb=1"></iframe>\n'
+          '  <iframe src="https://example.com/caf%E9/embed"></iframe>\n'
+          '</div>';
       expect(preprocessPreviewMarkdown(markdown), markdown);
     });
   });

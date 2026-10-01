@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.0 — 2026-10-02
+
+### Added
+- **Add YouTube video** toolbar button: paste a link to embed the player.
+- **macOS and Linux apps**, built from the same code and attached to each
+  GitHub release as a `.dmg` (macOS 10.15+, universal), a `.deb` (Ubuntu
+  24.04+) and a `.tar.gz`. Images come from a file dialog and are resized and
+  stripped of EXIF in the app (HEIC is not supported); there is no camera, and
+  video upload is macOS only. Signing in on Linux needs a Secret Service
+  keyring. See the README for the macOS "Open Anyway" step.
+
+### Fixed
+- An uploaded video inserted mid-paragraph now gets blank lines around it,
+  so kramdown treats the embed as an HTML block.
+- The editor toolbar fits on 393dp+ phones and scrolls instead of
+  overflowing on narrower ones.
+
 ## 2.1.1 — 2026-08-18
 
 ### Fixed

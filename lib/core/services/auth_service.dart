@@ -102,14 +102,14 @@ class AuthService {
   /// Unlike [validateToken], a network/connection failure here does NOT
   /// invalidate the session: the stored token is trusted and [AuthOffline]
   /// is returned so the app can proceed with cached data. Only a real 401
-  /// response (revoked/expired token) or a missing token returns
-  /// [AuthFailure].
+  /// response (revoked/expired token), a missing token or unreadable storage
+  /// (Linux without a Secret Service keyring) returns [AuthFailure].
   Future<AuthResult> checkExistingAuth() async {
-    if (!await _secureStorage.hasToken()) {
-      return const AuthFailure('No token stored');
-    }
-
     try {
+      if (!await _secureStorage.hasToken()) {
+        return const AuthFailure('No token stored');
+      }
+
       final response = await _dio.get(
         '/user',
         options: Options(

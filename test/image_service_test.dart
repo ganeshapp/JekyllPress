@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:jekyllpress/core/services/image_service.dart';
 
 void main() {
@@ -46,6 +49,41 @@ void main() {
 
     test('handles names without an extension', () {
       expect(deduplicateFilename('file', (name) => name == 'file'), 'file-2');
+    });
+  });
+
+  group('encodeJpeg (desktop)', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('encode_jpeg'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    String write(String name, List<int> bytes) =>
+        (File('${dir.path}/$name')..writeAsBytesSync(bytes)).path;
+    Future<img.Image> encode(String source) async => img.decodeJpg(
+        (await encodeJpeg(source, '${dir.path}/out.jpg',
+                maxEdge: 160, quality: 85))
+            .readAsBytesSync())!;
+
+    test('applies EXIF rotation, caps the long edge, drops GPS', () async {
+      final photo = img.Image(width: 400, height: 300);
+      photo.exif.imageIfd.orientation = 6; // shot in portrait
+      photo.exif.gpsIfd.setGpsLocation(latitude: 37.5, longitude: 127.0);
+
+      final out = await encode(write('in.jpg', img.encodeJpg(photo)));
+
+      expect([out.width, out.height], [120, 160]);
+      expect(out.exif.isEmpty, isTrue);
+    });
+
+    test('never upscales a small image', () async {
+      final out = await encode(
+          write('in.png', img.encodePng(img.Image(width: 100, height: 50))));
+      expect([out.width, out.height], [100, 50]);
+    });
+
+    test('rejects a file that is not an image', () {
+      expect(encode(write('in.txt', 'not an image'.codeUnits)),
+          throwsFormatException);
     });
   });
 }

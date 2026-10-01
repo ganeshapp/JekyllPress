@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:math' as math;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:video_compress/video_compress.dart';
+import '../platform.dart';
 
 /// Result of media processing (compressed image or video saved locally)
 class ProcessedMedia {
@@ -54,7 +57,8 @@ class ImageService {
   ///
   /// Applied by image_picker, whose maxWidth/maxHeight ARE a bounding box:
   /// the image is scaled so neither side exceeds them, preserving aspect
-  /// ratio and honouring EXIF orientation on the platform side.
+  /// ratio and honouring EXIF orientation on the platform side. Desktop
+  /// image_picker ignores them, so [encodeJpeg] applies it there.
   ///
   /// flutter_image_compress cannot do this. Its minWidth/minHeight are
   /// MINIMUMS on both axes - it computes
@@ -68,10 +72,13 @@ class ImageService {
   /// the compress pass only re-encodes and never resizes.
   static const int _noResize = 100000;
 
+  /// False on desktop: image_picker_macos/linux have no camera.
+  bool get canUseCamera => _picker.supportsImageSource(ImageSource.camera);
+
   /// Directory for storing local media. The physical name stays
   /// 'local_images' so files from pre-video builds are still found.
   Future<Directory> get _localMediaDir async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await appDataDir();
     final mediaDir = Directory(path.join(appDir.path, 'local_images'));
     if (!await mediaDir.exists()) {
       await mediaDir.create(recursive: true);
@@ -174,6 +181,13 @@ class ImageService {
     );
     final destPath = path.join(mediaDir.path, filename);
 
+    if (isDesktop) {
+      final destFile = await encodeJpeg(sourceFile.path, destPath,
+          maxEdge: maxImageEdge.toInt(), quality: 85);
+      return ProcessedMedia(
+          filename: filename, localPath: destPath, file: destFile);
+    }
+
     // Re-encode to JPEG at quality 85 and drop EXIF. The picker has already
     // bounded the dimensions, so this pass must NOT resize again - hence the
     // deliberately huge minWidth/minHeight, which keep the plugin's scale
@@ -209,4 +223,30 @@ class ImageService {
       await mediaDir.delete(recursive: true);
     }
   }
+}
+
+/// JPEG at [target], long edge capped at [maxEdge] (never upscaled), EXIF
+/// rotation applied and every other EXIF field (GPS) dropped. Pure Dart on a
+/// background isolate (~1 s per 12 MP photo on an M2), for desktop, where
+/// image_picker returns the untouched original. HEIC is not supported.
+Future<File> encodeJpeg(String source, String target,
+    {required int maxEdge, required int quality}) {
+  return Isolate.run(() {
+    // package:image's JPEG decoder applies the EXIF orientation itself.
+    var image = img.decodeImage(File(source).readAsBytesSync());
+    if (image == null) {
+      throw const FormatException('Unsupported image - use JPEG, PNG or WebP');
+    }
+    final scale = maxEdge / math.max(image.width, image.height);
+    if (scale < 1) {
+      image = img.copyResize(image,
+          width: (image.width * scale).round(),
+          height: (image.height * scale).round(),
+          interpolation: img.Interpolation.average);
+    }
+    // The decoder keeps GPS & co, and encodeJpg would write them back.
+    image.exif = img.ExifData();
+    return File(target)
+      ..writeAsBytesSync(img.encodeJpg(image, quality: quality));
+  });
 }

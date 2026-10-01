@@ -24,6 +24,9 @@ class SecureStorageService {
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
     ),
+    // The data-protection keychain needs a provisioning profile, which an
+    // ad-hoc signed build cannot have (-34018); use the login keychain.
+    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   );
 
   /// Save the GitHub access token (PAT or device-flow access token)

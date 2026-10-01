@@ -1,7 +1,7 @@
 name: jekyllpress
 description: "A mobile CMS for GitHub Pages (Jekyll) blogs"
 publish_to: 'none'
-version: 2.1.1+7
+version: 2.2.0+8
 
 environment:
   sdk: ^3.7.0
@@ -33,6 +33,9 @@ dependencies:
   flutter_image_compress: ^2.3.0
   path_provider: ^2.1.5
   path: ^1.9.0
+  # Desktop JPEG re-encode (no flutter_image_compress resize there). Already
+  # locked via flutter_launcher_icons; this only promotes it.
+  image: ^4.8.0
   
   # Connectivity
   connectivity_plus: ^6.1.0
@@ -70,3 +73,6 @@ flutter_launcher_icons:
   image_path: "JekyllPress.png"
   adaptive_icon_background: "#0D1F0D"
   adaptive_icon_foreground: "JekyllPress.png"
+  macos:
+    generate: true
+    image_path: "JekyllPress.png"

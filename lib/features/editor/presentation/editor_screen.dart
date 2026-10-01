@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
+import '../../../core/platform.dart';
 import '../../../core/providers/config_provider.dart';
 import '../../../core/providers/drafts_provider.dart';
 import '../../../core/providers/editor_provider.dart';
@@ -20,6 +21,8 @@ import '../../../core/services/github_upload_service.dart';
 import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/frontmatter_parser.dart';
+import '../../../core/utils/markdown_insert.dart';
+import '../../../core/utils/youtube.dart';
 import '../../../l10n/l10n.dart';
 import '../../../core/utils/external_url.dart';
 
@@ -954,8 +957,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   Future<void> _handleAddImage() async {
     if (_isPickingImage) return;
 
-    // Gallery or camera (video stays gallery-only)
-    final fromCamera = await _showImageSourceSheet();
+    // Gallery or camera (video stays gallery-only); desktop has no camera
+    final fromCamera = ref.read(imageServiceProvider).canUseCamera
+        ? await _showImageSourceSheet()
+        : false;
     if (fromCamera == null || !mounted) return;
 
     setState(() => _isPickingImage = true);
@@ -965,20 +970,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       final filename = await imageManager.pickImage(fromCamera: fromCamera);
 
       if (filename != null && mounted) {
-        // Generate markdown and insert at cursor. If the body was never
-        // focused there is no cursor - insert at the end and scroll there.
         final markdown = imageManager.generateMarkdownImage(filename);
-        final hadCursor = _bodyController.selection.isValid;
         _insertTextAtCursor('\n$markdown\n');
-        if (!hadCursor) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _bodyScrollController.hasClients) {
-              _bodyScrollController.jumpTo(
-                _bodyScrollController.position.maxScrollExtent,
-              );
-            }
-          });
-        }
 
         HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1009,7 +1002,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             // Background is overridden: take the foreground from onError so
             // the message stays readable in both themes
             content: Text(
-              context.l10n.failedToAddImage('$e'),
+              context.l10n.failedToAddImage(
+                  e is FormatException ? e.message : '$e'),
               style: TextStyle(color: context.colorScheme.onError),
             ),
             behavior: SnackBarBehavior.floating,
@@ -1065,20 +1059,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
 
       if (filename != null && mounted) {
-        // Insert the raw-HTML embed at the cursor (same no-cursor
-        // fallback as images: append at the end and scroll there)
-        final embed = imageManager.generateVideoEmbed(filename);
-        final hadCursor = _bodyController.selection.isValid;
-        _insertTextAtCursor('\n$embed\n');
-        if (!hadCursor) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _bodyScrollController.hasClients) {
-              _bodyScrollController.jumpTo(
-                _bodyScrollController.position.maxScrollExtent,
-              );
-            }
-          });
-        }
+        _insertTextAtCursor(
+          imageManager.generateVideoEmbed(filename),
+          asBlock: true,
+        );
 
         HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1125,6 +1109,51 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  /// Ask for a YouTube link and insert the player embed at the cursor
+  Future<void> _handleAddYouTube() async {
+    var url = '';
+    final video = await showDialog<YouTubeVideo>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final parsed = parseYouTubeUrl(url);
+          final insert =
+              parsed == null ? null : () => Navigator.pop(context, parsed);
+          return AlertDialog(
+            title: Text(context.l10n.addYouTubeTitle),
+            content: TextField(
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                hintText: context.l10n.youTubeLinkHint,
+                errorText: parsed == null && url.trim().isNotEmpty
+                    ? context.l10n.notAYouTubeLink
+                    : null,
+              ),
+              onChanged: (value) => setDialogState(() => url = value),
+              onSubmitted: (_) => insert?.call(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(context.l10n.commonCancel),
+              ),
+              TextButton(
+                onPressed: insert,
+                child: Text(context.l10n.insertAction),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (video == null || !mounted) return;
+    _insertTextAtCursor(youTubeEmbed(video), asBlock: true);
+    HapticFeedback.mediumImpact();
+  }
+
   /// Force a plain tap to place the caret instead of extending a selection.
   ///
   /// Flutter treats a tap as "extend selection to here" whenever it believes
@@ -1132,8 +1161,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   /// Bluetooth keyboard, or an IME that emits a Shift press without a
   /// matching release - and then every tap in a long post selects everything
   /// between the old caret and the tap. There is no shift-tap gesture to
-  /// preserve on a touch-only writing surface, so a single tap always
-  /// collapses to where the user actually tapped (the extent).
+  /// preserve on a phone, so a single tap always collapses to where the user
+  /// actually tapped (the extent). Desktop skips it to keep shift-click.
   ///
   /// Runs after the framework has set the selection. Double-tap-to-select-word
   /// is unaffected: [TextField.onTap] only fires on the first tap of a series.
@@ -1144,12 +1173,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         TextSelection.collapsed(offset: selection.extentOffset);
   }
 
-  void _insertTextAtCursor(String text) {
+  /// Insert [text] at the cursor, replacing any selection. [asBlock] pads it
+  /// with blank lines (see [padAsBlock]) for raw-HTML embeds.
+  void _insertTextAtCursor(String text, {bool asBlock = false}) {
     final value = _bodyController.value;
     final selection = value.selection;
 
     // Replace an active selection instead of splicing into it.
-    // No valid selection (field never focused) means append at the end.
+    // No valid selection (field never focused) means append at the end
+    // and scroll there.
     final int start;
     final int end;
     if (selection.isValid) {
@@ -1158,8 +1190,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     } else {
       start = value.text.length;
       end = value.text.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _bodyScrollController.hasClients) {
+          _bodyScrollController.jumpTo(
+            _bodyScrollController.position.maxScrollExtent,
+          );
+        }
+      });
     }
 
+    if (asBlock) {
+      text = padAsBlock(
+        text,
+        before: value.text.substring(0, start),
+        after: value.text.substring(end),
+      );
+    }
     final newText = value.text.replaceRange(start, end, text);
 
     // Set text + selection atomically so listeners fire once with a
@@ -1183,28 +1229,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         body: Container(
           decoration: AppTheme.backgroundGradient(context),
           child: SafeArea(
-            child: Column(
-              children: [
-                _buildAppBar(),
-                _buildTabBar(),
-                Expanded(
-                  // IndexedStack keeps both tabs alive so Write scroll
-                  // position, undo history, and Preview scroll survive
-                  // tab switches
-                  child: ListenableBuilder(
-                    listenable: _tabController,
-                    builder: (context, _) {
-                      return IndexedStack(
-                        index: _tabController.index,
-                        children: [
-                          _buildWriteTab(),
-                          _buildPreviewTab(),
-                        ],
-                      );
-                    },
-                  ),
+            // Desktop: keep lines readable in a wide window
+            child: Center(
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxWidth: isDesktop ? 900 : double.infinity),
+                child: Column(
+                  children: [
+                    _buildAppBar(),
+                    _buildTabBar(),
+                    Expanded(
+                      // IndexedStack keeps both tabs alive so Write scroll
+                      // position, undo history, and Preview scroll survive
+                      // tab switches
+                      child: ListenableBuilder(
+                        listenable: _tabController,
+                        builder: (context, _) {
+                          return IndexedStack(
+                            index: _tabController.index,
+                            children: [
+                              _buildWriteTab(),
+                              _buildPreviewTab(),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1454,7 +1507,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               textCapitalization: TextCapitalization.words,
               textInputAction: TextInputAction.next,
               onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-              spellCheckConfiguration: const SpellCheckConfiguration(),
+              // Desktop has no spell check service; debug builds log an error
+              spellCheckConfiguration:
+                  isDesktop ? null : const SpellCheckConfiguration(),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -1539,11 +1594,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 maxLines: null,
                 minLines: null,
                 textAlignVertical: TextAlignVertical.top,
-                onTap: _collapseCaretAfterTap,
+                onTap: isDesktop ? null : _collapseCaretAfterTap,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
                 textCapitalization: TextCapitalization.sentences,
-                spellCheckConfiguration: const SpellCheckConfiguration(),
+                spellCheckConfiguration:
+                    isDesktop ? null : const SpellCheckConfiguration(),
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.6,
@@ -1601,58 +1657,84 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             context.l10n.contentLabel,
             style: Theme.of(context).textTheme.labelLarge,
           ),
-          const Spacer(),
-          // Undo / Redo buttons
-          ValueListenableBuilder<UndoHistoryValue>(
-            valueListenable: _undoController,
-            builder: (context, undoValue, _) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ToolbarButton(
-                    icon: Icons.undo_rounded,
-                    tooltip: context.l10n.undoTooltip,
-                    onPressed: undoValue.canUndo ? _undoController.undo : null,
-                  ),
-                  const SizedBox(width: 6),
-                  _ToolbarButton(
-                    icon: Icons.redo_rounded,
-                    tooltip: context.l10n.redoTooltip,
-                    onPressed: undoValue.canRedo ? _undoController.redo : null,
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(width: 6),
-          // Keyboard dismiss button
-          _ToolbarButton(
-            icon: Icons.keyboard_hide_rounded,
-            tooltip: context.l10n.hideKeyboardTooltip,
-            onPressed: () => FocusScope.of(context).unfocus(),
-          ),
-          const SizedBox(width: 6),
-          // Add Image button
-          _ToolbarButton(
-            icon: Icons.image_rounded,
-            tooltip: context.l10n.addImageTooltip,
-            onPressed: _isPickingImage ? null : _handleAddImage,
-            isLoading: _isPickingImage,
-          ),
-          const SizedBox(width: 6),
-          // Add Video button
-          _ToolbarButton(
-            icon: Icons.videocam_rounded,
-            tooltip: context.l10n.addVideoTooltip,
-            onPressed: _isPickingVideo ? null : _handleAddVideo,
-            isLoading: _isPickingVideo,
-          ),
-          const SizedBox(width: 6),
-          // Markdown help button
-          _ToolbarButton(
-            icon: Icons.help_outline_rounded,
-            tooltip: context.l10n.markdownHelpTooltip,
-            onPressed: _showMarkdownHelp,
+          const SizedBox(width: 12),
+          // Scrolls instead of overflowing on narrow phones
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Undo / Redo buttons
+                    ValueListenableBuilder<UndoHistoryValue>(
+                      valueListenable: _undoController,
+                      builder: (context, undoValue, _) {
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _ToolbarButton(
+                              icon: Icons.undo_rounded,
+                              tooltip: context.l10n.undoTooltip,
+                              onPressed:
+                                  undoValue.canUndo ? _undoController.undo : null,
+                            ),
+                            const SizedBox(width: 6),
+                            _ToolbarButton(
+                              icon: Icons.redo_rounded,
+                              tooltip: context.l10n.redoTooltip,
+                              onPressed:
+                                  undoValue.canRedo ? _undoController.redo : null,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    // Keyboard dismiss button (no on-screen keyboard on desktop)
+                    if (!isDesktop) ...[
+                      _ToolbarButton(
+                        icon: Icons.keyboard_hide_rounded,
+                        tooltip: context.l10n.hideKeyboardTooltip,
+                        onPressed: () => FocusScope.of(context).unfocus(),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    // Add Image button
+                    _ToolbarButton(
+                      icon: Icons.image_rounded,
+                      tooltip: context.l10n.addImageTooltip,
+                      onPressed: _isPickingImage ? null : _handleAddImage,
+                      isLoading: _isPickingImage,
+                    ),
+                    const SizedBox(width: 6),
+                    // Add Video button (no video_compress on Linux)
+                    if (!isLinux) ...[
+                      _ToolbarButton(
+                        icon: Icons.videocam_rounded,
+                        tooltip: context.l10n.addVideoTooltip,
+                        onPressed: _isPickingVideo ? null : _handleAddVideo,
+                        isLoading: _isPickingVideo,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    // Add YouTube video button
+                    _ToolbarButton(
+                      icon: Icons.smart_display_rounded,
+                      tooltip: context.l10n.addYouTubeTooltip,
+                      onPressed: _handleAddYouTube,
+                    ),
+                    const SizedBox(width: 6),
+                    // Markdown help button
+                    _ToolbarButton(
+                      icon: Icons.help_outline_rounded,
+                      tooltip: context.l10n.markdownHelpTooltip,
+                      onPressed: _showMarkdownHelp,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1738,8 +1820,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
                 ),
                 child: MarkdownBody(
-                  // Raw <video> HTML blocks become placeholder "images"
-                  // routed to _buildVideoPlaceholder via the builder below
+                  // Raw <video> and YouTube <iframe> blocks become placeholder
+                  // "images" routed to _buildVideoPlaceholder via the builder
                   data: preprocessPreviewMarkdown(editorState.bodyContent),
                   selectable: true,
                   styleSheet: _buildMarkdownStyleSheet(),
@@ -1754,14 +1836,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   /// Smart image resolver - checks local cache first, falls back to GitHub.
-  /// Video placeholders injected by [preprocessPreviewMarkdown] render as
-  /// a card instead (the preview never plays video).
+  /// Video and YouTube placeholders injected by [preprocessPreviewMarkdown]
+  /// render as a card instead (the preview never plays video).
   Widget _buildImage(Uri uri, String? title, String? alt) {
     final path = uri.toString();
     final filename = path.split('/').last;
 
     if (uri.scheme == videoPreviewScheme) {
-      return _buildVideoPlaceholder(filename);
+      return _buildVideoPlaceholder(
+        filename,
+        isYouTube: alt == youTubePreviewAlt,
+      );
     }
 
     return Consumer(
@@ -1813,8 +1898,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   /// Rounded card standing in for a raw-HTML <video> embed: play badge,
-  /// filename, and the same upload overlays as images
-  Widget _buildVideoPlaceholder(String filename) {
+  /// filename, and the same upload overlays as images. For a YouTube embed
+  /// [filename] is the video id: it shows the thumbnail and opens on tap.
+  Widget _buildVideoPlaceholder(String filename, {bool isYouTube = false}) {
     final label =
         filename.isEmpty ? context.l10n.videoFallbackLabel : filename;
 
@@ -1838,6 +1924,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   border: Border.all(
                     color: context.colorScheme.outline.withAlpha(100),
                   ),
+                  image: isYouTube
+                      ? DecorationImage(
+                          image: NetworkImage(
+                            'https://i.ytimg.com/vi/$filename/hqdefault.jpg',
+                          ),
+                          fit: BoxFit.cover,
+                          // Offline: the bare card still reads as a video
+                          onError: (_, __) {},
+                        )
+                      : null,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1854,18 +1950,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         color: context.colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                        color: context.colorScheme.onSurfaceVariant,
+                    if (!isYouTube) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          color: context.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
+              if (isYouTube)
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () => _launchExternal(
+                      'https://www.youtube.com/watch?v=$filename',
+                    ),
+                  ),
+                ),
               if (uploadStatus != null && uploadStatus.isUploading)
                 Positioned.fill(child: _buildUploadingOverlay()),
               if (uploadStatus != null && uploadStatus.error != null)
@@ -2687,7 +2793,7 @@ class _ToolbarButton extends StatelessWidget {
         onTap: onPressed,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: context.colorScheme.outline.withAlpha(60),
             borderRadius: BorderRadius.circular(8),

@@ -1119,6 +1119,26 @@
   "@addVideoTooltip": {
     "description": "Tooltip of the insert-video toolbar button"
   },
+  "addYouTubeTooltip": "Add YouTube video",
+  "@addYouTubeTooltip": {
+    "description": "Tooltip of the insert-YouTube-video toolbar button"
+  },
+  "addYouTubeTitle": "Add YouTube Video",
+  "@addYouTubeTitle": {
+    "description": "Title of the dialog asking for a YouTube link"
+  },
+  "youTubeLinkHint": "Paste a YouTube link",
+  "@youTubeLinkHint": {
+    "description": "Hint of the link field in the YouTube dialog"
+  },
+  "notAYouTubeLink": "Not a YouTube video link",
+  "@notAYouTubeLink": {
+    "description": "Inline error when the YouTube dialog's input is not a recognised video link"
+  },
+  "insertAction": "Insert",
+  "@insertAction": {
+    "description": "Confirm button of the YouTube dialog"
+  },
   "markdownHelpTooltip": "Markdown help",
   "@markdownHelpTooltip": {
     "description": "Tooltip of the markdown reference toolbar button"

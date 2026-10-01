@@ -1,6 +1,6 @@
 # JekyllPress Privacy Policy
 
-_Last updated: 2026-08-18 (v2.1.0)_
+_Last updated: 2026-10-02 (v2.2.0)_
 
 JekyllPress is an open-source Android app that publishes posts to a Jekyll blog
 hosted in **your own GitHub repository**. It is designed so that your data never
@@ -26,6 +26,12 @@ touches anything except your device and GitHub.
 
 Device backups are disabled for the app (`android:allowBackup="false"`), so
 none of this data is copied into Android or cloud backups.
+
+On macOS and Linux the token and Client ID live in the login keychain (macOS)
+or the Secret Service keyring (Linux, e.g. GNOME Keyring), and everything else
+in the app's own folder: `~/Library/Application Support/com.jekyllpress.jekyllpress`
+or `~/.local/share/jekyllpress` (`~/.local/share/com.jekyllpress.jekyllpress`
+where the GLib development package is installed).
 
 ## What leaves your device
 
