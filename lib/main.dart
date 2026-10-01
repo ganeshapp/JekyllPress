@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'core/models/app_config.dart';
 import 'core/models/blog_post.dart';
 import 'core/models/local_draft.dart';
+import 'core/platform.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_wrapper.dart';
@@ -14,8 +15,8 @@ import 'l10n/l10n.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive for local storage
-  await Hive.initFlutter();
+  // Initialize Hive for local storage (== Hive.initFlutter() on Android)
+  Hive.init((await appDataDir()).path);
 
   // Register Hive adapters
   Hive.registerAdapter(AppConfigAdapter());
@@ -68,7 +69,12 @@ class JekyllPressApp extends ConsumerWidget {
             systemNavigationBarColor: scheme.surface,
             systemNavigationBarIconBrightness: iconBrightness,
           ),
-          child: child ?? const SizedBox.shrink(),
+          // Desktop: keep lines readable in a wide window
+          child: isDesktop
+              ? ColoredBox(
+                  color: scheme.surface,
+                  child: Center(child: SizedBox(width: 900, child: child)))
+              : child ?? const SizedBox.shrink(),
         );
       },
       home: const AuthWrapper(),

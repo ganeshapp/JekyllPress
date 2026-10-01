@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
+import '../../../core/platform.dart';
 import '../../../core/providers/config_provider.dart';
 import '../../../core/providers/drafts_provider.dart';
 import '../../../core/providers/editor_provider.dart';
@@ -956,8 +957,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   Future<void> _handleAddImage() async {
     if (_isPickingImage) return;
 
-    // Gallery or camera (video stays gallery-only)
-    final fromCamera = await _showImageSourceSheet();
+    // Gallery or camera (video stays gallery-only); desktop has no camera
+    final fromCamera = ref.read(imageServiceProvider).canUseCamera
+        ? await _showImageSourceSheet()
+        : false;
     if (fromCamera == null || !mounted) return;
 
     setState(() => _isPickingImage = true);
@@ -1692,14 +1695,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       isLoading: _isPickingImage,
                     ),
                     const SizedBox(width: 6),
-                    // Add Video button
-                    _ToolbarButton(
-                      icon: Icons.videocam_rounded,
-                      tooltip: context.l10n.addVideoTooltip,
-                      onPressed: _isPickingVideo ? null : _handleAddVideo,
-                      isLoading: _isPickingVideo,
-                    ),
-                    const SizedBox(width: 6),
+                    // Add Video button (no video_compress on Linux)
+                    if (!isLinux) ...[
+                      _ToolbarButton(
+                        icon: Icons.videocam_rounded,
+                        tooltip: context.l10n.addVideoTooltip,
+                        onPressed: _isPickingVideo ? null : _handleAddVideo,
+                        isLoading: _isPickingVideo,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                     // Add YouTube video button
                     _ToolbarButton(
                       icon: Icons.smart_display_rounded,
