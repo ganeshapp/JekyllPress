@@ -86,4 +86,41 @@ void main() {
           throwsFormatException);
     });
   });
+
+  group('HEIC on desktop', () {
+    test('isHeic matches .heic and .heif in any case', () {
+      expect(isHeic('IMG_0001.HEIC'), isTrue);
+      expect(isHeic('export/photo.heif'), isTrue);
+      expect(isHeic('photo.jpg'), isFalse);
+      expect(isHeic('heic'), isFalse);
+    });
+
+    // sips ships with macOS only; CI's Linux runner skips these two
+    final skip = !Platform.isMacOS;
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('heic'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('sips turns a HEIC into a JPEG that encodeJpeg accepts', () async {
+      // A real HEIC, made the same way macOS makes them
+      final png = File('${dir.path}/in.png')
+        ..writeAsBytesSync(img.encodePng(img.Image(width: 40, height: 30)));
+      final made = Process.runSync(
+          'sips', ['-s', 'format', 'heic', png.path, '--out', '${dir.path}/in.heic']);
+      expect(made.exitCode, 0, reason: '${made.stderr}');
+
+      final jpeg = await convertHeicWithSips('${dir.path}/in.heic', dir.path);
+      final out = img.decodeJpg((await encodeJpeg(
+              jpeg.path, '${dir.path}/out.jpg', maxEdge: 160, quality: 85))
+          .readAsBytesSync())!;
+
+      expect(jpeg.path, startsWith(dir.path));
+      expect([out.width, out.height], [40, 30]);
+    }, skip: skip);
+
+    test('a file sips cannot read fails with a clear message', () async {
+      final bogus = File('${dir.path}/in.heic')..writeAsStringSync('nope');
+      expect(convertHeicWithSips(bogus.path, dir.path), throwsFormatException);
+    }, skip: skip);
+  });
 }

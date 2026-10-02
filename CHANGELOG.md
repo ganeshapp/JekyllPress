@@ -25,6 +25,9 @@
   was installed, so the repository setup and local drafts "disappeared" when
   build tools came or went. Data in the old `~/.local/share/jekyllpress`
   folder is moved over on first launch.
+- **macOS: HEIC photos (iPhone, Photos.app exports) are converted** with the
+  system's `sips` before upload instead of being rejected after you picked
+  them. Linux has no HEIC decoder and now says so plainly.
 
 ### Changed
 - GitHub API requests identify the app and its version in their User-Agent,

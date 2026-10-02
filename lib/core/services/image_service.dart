@@ -203,10 +203,25 @@ class ImageService {
     final destPath = path.join(mediaDir.path, filename);
 
     if (isDesktop) {
-      final destFile = await encodeJpeg(sourceFile.path, destPath,
-          maxEdge: maxImageEdge.toInt(), quality: 85);
-      return ProcessedMedia(
-          filename: filename, localPath: destPath, file: destFile);
+      // package:image has no HEIC decoder; macOS has sips, Linux has nothing
+      File? converted;
+      if (isHeic(sourceFile.path)) {
+        if (!isMacOS) {
+          throw const FormatException(
+              'HEIC is not supported on Linux - export the photo as JPEG first');
+        }
+        converted = await convertHeicWithSips(
+            sourceFile.path, (await appCacheDir()).path);
+      }
+      try {
+        final destFile = await encodeJpeg(
+            (converted ?? sourceFile).path, destPath,
+            maxEdge: maxImageEdge.toInt(), quality: 85);
+        return ProcessedMedia(
+            filename: filename, localPath: destPath, file: destFile);
+      } finally {
+        await converted?.delete();
+      }
     }
 
     // Re-encode to JPEG at quality 85 and drop EXIF. The picker has already
@@ -246,10 +261,32 @@ class ImageService {
   }
 }
 
+/// Apple's HEIF container: iPhone photos, Photos.app exports
+bool isHeic(String file) =>
+    const {'.heic', '.heif'}.contains(path.extension(file).toLowerCase());
+
+/// macOS: decode a HEIC with the system's own `sips` (on every Mac) into a
+/// near-lossless JPEG in [dir]; [encodeJpeg] then resizes it and drops the
+/// metadata. The caller deletes the result.
+Future<File> convertHeicWithSips(String source, String dir) async {
+  final out = File(path.join(
+      dir, 'heic_${DateTime.now().microsecondsSinceEpoch}.jpg'));
+  final result = await Process.run('sips', [
+    '-s', 'format', 'jpeg', '-s', 'formatOptions', 'best', // intermediate
+    source, '--out', out.path,
+  ]);
+  if (result.exitCode != 0 || !out.existsSync()) {
+    throw FormatException(
+        'Could not convert the HEIC photo: ${result.stderr}'.trim());
+  }
+  return out;
+}
+
 /// JPEG at [target], long edge capped at [maxEdge] (never upscaled), EXIF
 /// rotation applied and every other EXIF field (GPS) dropped. Pure Dart on a
 /// background isolate (~1 s per 12 MP photo on an M2), for desktop, where
-/// image_picker returns the untouched original. HEIC is not supported.
+/// image_picker returns the untouched original. HEIC must be converted
+/// first ([convertHeicWithSips]).
 Future<File> encodeJpeg(String source, String target,
     {required int maxEdge, required int quality}) {
   return Isolate.run(() {
