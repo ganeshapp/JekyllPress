@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:video_compress/video_compress.dart';
 import '../platform.dart';
+import '../utils/mp4_metadata.dart';
 
 /// Result of media processing (compressed image or video saved locally)
 class ProcessedMedia {
@@ -122,8 +123,8 @@ class ImageService {
     return _picker.pickVideo(source: ImageSource.gallery);
   }
 
-  /// Compress a picked video (H.264, short edge capped at 640px) and save
-  /// it locally.
+  /// Compress a picked video (H.264, short edge capped at 640px), blank its
+  /// metadata and save it locally.
   /// Throws with a clear message when the compressed file still exceeds
   /// [maxVideoUploadBytes].
   Future<ProcessedMedia> compressAndSaveVideo(XFile pickedFile) async {
@@ -135,8 +136,16 @@ class ImageService {
       deleteOrigin: false,
     );
 
+    // A cancelled export reports the SOURCE path: never take that as output
     final compressed = info?.file;
-    if (compressed == null) {
+    if (compressed == null ||
+        info!.isCancel == true ||
+        !await compressed.exists()) {
+      // Android reports a failed transcode as null and can leave a partial
+      // file in its app-private video_compress folder. On macOS that folder
+      // is $TMPDIR/video_compress, shared by every app using the plugin, so
+      // it is never wiped there.
+      if (!isDesktop) await VideoCompress.deleteAllCache();
       throw Exception('Failed to compress video');
     }
 
@@ -158,14 +167,26 @@ class ImageService {
       final destPath = path.join(mediaDir.path, filename);
       final destFile = await compressed.copy(destPath);
 
+      // The re-encode copies the source's metadata, GPS location included
+      // (AVAssetExportSession translates it, MediaMuxer.setLocation
+      // reproduces it): blank it in place
+      if (await stripMp4Metadata(destFile) == null) {
+        await destFile.delete();
+        throw Exception(
+            'Could not remove the metadata from the compressed video');
+      }
+
       return ProcessedMedia(
         filename: filename,
         localPath: destPath,
         file: destFile,
       );
     } finally {
-      // Drop the plugin's cache copy; the original video is untouched
-      await VideoCompress.deleteAllCache();
+      // Only this call's output; the plugin's folder may hold another
+      // app's in-progress export on macOS. The original video is untouched.
+      try {
+        await compressed.delete();
+      } catch (_) {}
     }
   }
 

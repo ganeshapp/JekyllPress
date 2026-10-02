@@ -3,6 +3,12 @@
 ## 2.2.1 — 2026-10-02
 
 ### Fixed
+- **Videos no longer carry their recording location.** The re-encoder
+  copies the source's metadata into the compressed clip, so a video shot on
+  a phone was uploaded with its GPS coordinates. The container's metadata
+  boxes are now blanked before upload, on every platform. The converter's
+  shared temp folder is no longer wiped either; only the app's own output
+  file is removed.
 - **macOS: the sign-in is one keychain item under an app-specific service
   name** (`com.jekyllpress.jekyllpress`). It was five items under
   flutter_secure_storage's default service name, which every app built with
