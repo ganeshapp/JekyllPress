@@ -109,8 +109,8 @@ REST API — no clone, no git commands, no merge conflicts.
 
 ### Works with any Jekyll site
 - Configurable **posts folder** (`_posts` anywhere, including `docs/_posts`),
-  **drafts folder**, and additional **collection folders** with a one-tap
-  switcher on the dashboard.
+  **drafts folder**, and additional **collection folders** with a switcher on
+  the dashboard.
 - **Branch picker** — publish to any branch, not just the default.
 - **Project sites**: `baseurl`-aware image URLs and post links.
 - Posts in **subfolders** (year/category layouts) are found via the git trees
