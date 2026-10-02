@@ -32,7 +32,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   static const _appSetupUrl =
       'https://github.com/settings/apps/new'
       '?name=JekyllPress'
-      '&description=Write%20and%20publish%20posts%20to%20my%20Jekyll%20blog%20from%20my%20phone'
+      '&description=Write%20and%20publish%20posts%20to%20my%20Jekyll%20blog'
       '&url=https%3A%2F%2Fgithub.com%2Fganeshapp%2FJekyllPress'
       '&public=false'
       '&webhook_active=false'

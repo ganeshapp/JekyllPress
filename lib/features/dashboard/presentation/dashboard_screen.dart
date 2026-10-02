@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/app_config.dart';
 import '../../../core/models/blog_post.dart';
 import '../../../core/models/local_draft.dart';
+import '../../../core/platform.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/config_provider.dart';
 import '../../../core/providers/drafts_provider.dart';
@@ -1354,7 +1355,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ],
           if (visibleLocal.isNotEmpty) ...[
             _buildDraftsSectionHeader(
-              Icons.smartphone_rounded,
+              isDesktop ? Icons.computer_rounded : Icons.smartphone_rounded,
               context.l10n.draftsOnDeviceSection,
             ),
             for (final draft in visibleLocal) _buildDraftCard(draft),

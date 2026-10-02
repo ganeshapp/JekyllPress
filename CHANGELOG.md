@@ -32,6 +32,10 @@
   pull-to-refresh); every screen keeps its content at a readable width in a
   wide window; Tab in the post body indents instead of jumping to the
   toolbar; quitting on macOS waits for the pending autosave.
+- Copy that only made sense on a phone (About, the sign-in tagline, hints
+  that said "tap") now fits a laptop too, and PRIVACY.md says what
+  uninstalling leaves behind on each OS. The Android launcher label matches
+  the app name ("JekyllPress").
 
 ### Changed
 - GitHub API requests identify the app and its version in their User-Agent,

@@ -33,7 +33,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonView => 'View';
 
   @override
-  String get loginTagline => 'Your mobile CMS for Jekyll blogs.\nConnect with your GitHub account.';
+  String get loginTagline => 'A CMS for your Jekyll blog.\nConnect with your GitHub account.';
 
   @override
   String couldNotOpenBrowserLinkCopied(String url) {
@@ -251,7 +251,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageAssetsPathLabel => 'Image Assets Path';
 
   @override
-  String get imageAssetsPathHelper => 'Folder where images will be uploaded. Tap the folder icon to browse.';
+  String get imageAssetsPathHelper => 'Folder where images will be uploaded. Use the folder icon to browse.';
 
   @override
   String pathFieldRequired(String field) {
@@ -493,12 +493,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String failedQueueItemSemantics(String title) {
-    return 'Failed to publish \"$title\". Tap to reopen it in the editor';
+    return 'Failed to publish \"$title\". Select to reopen it in the editor';
   }
 
   @override
   String couldNotPublishTapToEdit(String title) {
-    return 'Couldn\'t publish \"$title\" - tap to edit';
+    return 'Couldn\'t publish \"$title\" - select to edit';
   }
 
   @override
@@ -595,7 +595,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get tapPlusToWrite => 'Tap the + button to start writing';
+  String get tapPlusToWrite => 'Use the + button to start writing';
 
   @override
   String get draftSavedSnack => 'Draft saved';
@@ -866,10 +866,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get publicationDateLabel => 'Publication date';
 
   @override
-  String get currentPostDateHint => 'Current post date - tap to change';
+  String get currentPostDateHint => 'Current post date - select to change';
 
   @override
-  String get dateSetAutomaticallyHint => 'Set automatically when you publish - tap to override';
+  String get dateSetAutomaticallyHint => 'Set automatically when you publish - select to override';
 
   @override
   String get layoutEmptyHint => 'Leave empty to use the site default';
@@ -907,31 +907,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutSectionTitle => 'About Jekyll Press';
 
   @override
-  String get aboutSectionBody => 'Jekyll Press is a mobile-first CMS for any Jekyll blog hosted on GitHub. Write, edit, and publish posts directly from your phone — no laptop, no git commands.\n\nBuilt with Flutter and powered by the GitHub REST API, it works with your repository as-is: your posts folder, drafts, collections, branch, and front matter conventions are all configurable.';
+  String get aboutSectionBody => 'JekyllPress is a CMS for any Jekyll blog hosted on GitHub. Write, edit, and publish posts from your phone or your desktop — no clone, no git commands.\n\nBuilt with Flutter and powered by the GitHub REST API, it works with your repository as-is: your posts folder, drafts, collections, branch, and front matter conventions are all configurable.';
 
   @override
   String get motivationTitle => 'Motivation';
 
   @override
-  String get motivationBody => 'As a developer who blogs on GitHub Pages, I often found inspiration for new posts while away from my computer. Jekyll Press was born from the need to capture and publish those ideas immediately, without waiting to get back to a desktop.\n\nThe goal is simple: make mobile blogging on Jekyll as seamless as writing in any native notes app.';
+  String get motivationBody => 'As a developer who blogs on GitHub Pages, I often found inspiration for new posts while away from my computer. JekyllPress was born from the need to capture and publish those ideas immediately, without waiting to get back to a desktop.\n\nThe goal is simple: make blogging on Jekyll as seamless as writing in a notes app, on a phone or a laptop.';
 
   @override
   String get howToUseTitle => 'How to Use';
 
   @override
-  String get howToUseBody => '1. Tap \"Sign in with GitHub\" and approve the code on github.com — or paste a Personal Access Token instead\n2. Select your Jekyll blog repository and branch\n3. Confirm the detected posts, drafts, and assets folders\n4. Start writing! Tap the + button to create a new post\n5. Add photos and videos straight from your gallery or camera\n6. Use the Preview tab to see your formatted markdown\n7. Hit Publish to push directly to GitHub — or queue it while offline';
+  String get howToUseBody => '1. Choose \"Sign in with GitHub\" and approve the code on github.com — or paste a Personal Access Token instead\n2. Select your Jekyll blog repository and branch\n3. Confirm the detected posts, drafts, and assets folders\n4. Start writing! Use the + button to create a new post\n5. Add photos and videos from your gallery or camera (a file dialog on desktop)\n6. Use the Preview tab to see your formatted markdown\n7. Hit Publish to push directly to GitHub — or queue it while offline';
 
   @override
   String get limitationsTitle => 'Limitations';
 
   @override
-  String get limitationsBody => '• Android only\n• \"Sign in with GitHub\" asks for the repo scope: read and write access to your repositories, public and private. It is the narrowest scope that lets an OAuth app edit files in a private repo. JekyllPress only touches the repository you configure, and you can revoke access any time at github.com → Settings → Applications → Authorized OAuth Apps. For access to a single repository, sign in with a fine-grained Personal Access Token instead\n• Published posts cannot be renamed in-app (the filename dictates the permalink; renames would break links)\n• Videos are re-encoded with the short edge capped at 640px, and uploads are capped at 25MB\n• Repository files are edited one at a time via the GitHub API (no multi-file commits or merges)';
+  String get limitationsBody => '• Android, macOS and Linux (no iOS or Windows); on desktop there is no camera, and video upload is macOS only\n• \"Sign in with GitHub\" asks for the repo scope: read and write access to your repositories, public and private. It is the narrowest scope that lets an OAuth app edit files in a private repo. JekyllPress only touches the repository you configure, and you can revoke access any time at github.com → Settings → Applications → Authorized OAuth Apps. For access to a single repository, sign in with a fine-grained Personal Access Token instead\n• Published posts cannot be renamed in-app (the filename dictates the permalink; renames would break links)\n• Videos are re-encoded with the short edge capped at 640px, and uploads are capped at 25MB\n• Repository files are edited one at a time via the GitHub API (no multi-file commits or merges)';
 
   @override
   String get privacySectionTitle => 'Privacy';
 
   @override
-  String get privacySectionBody => 'Everything stays between your device and your own GitHub repository. Your token lives in Android\'s encrypted, Keystore-backed storage; there are no analytics and no third-party servers. Logging out deletes the token from this device and wipes all cached content — it does not revoke the token on GitHub, so revoke it there too if you want the authorization gone.';
+  String get privacySectionBody => 'Everything stays between your device and your own GitHub repository. Your token lives in the system\'s credential store — Android\'s Keystore-backed storage, the macOS login keychain or the Linux Secret Service; there are no analytics and no third-party servers. Logging out deletes the token from this device and wipes all cached content — it does not revoke the token on GitHub, so revoke it there too if you want the authorization gone.';
 
   @override
   String get readPrivacyPolicy => 'Read the privacy policy';

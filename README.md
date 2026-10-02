@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>A polished, mobile-first CMS for any Jekyll blog hosted on GitHub.</strong>
+  <strong>A polished CMS for any Jekyll blog hosted on GitHub. Android, macOS and Linux.</strong>
 </p>
 
 <p align="center">
@@ -47,7 +47,7 @@ I use AI to help me code. But I review all the edits.
 The same release has macOS and Linux downloads, see
 [Desktop](#desktop-macos--linux).
 
-Nothing to register: install it, tap **Sign in with GitHub**, approve the code
+Nothing to register: install it, choose **Sign in with GitHub**, approve the code
 on github.com, and pick your blog repository. Details in
 [Signing in](#signing-in).
 
@@ -61,8 +61,8 @@ Each release also carries `jekyllpress-<version>-macos.dmg`,
   macOS blocks the first launch: dismiss the dialog, then click **Open Anyway**
   in System Settings → Privacy & Security. Or run
   `xattr -dr com.apple.quarantine /Applications/JekyllPress.app`. After each
-  update expect that step again, plus one keychain "Always Allow" prompt per
-  stored sign-in item.
+  update expect that step again, plus one keychain "Always Allow" prompt (the
+  sign-in is a single keychain item, `com.jekyllpress.jekyllpress`).
 - **Ubuntu 24.04+ / Debian 13+**: `sudo apt install ./jekyllpress-<version>-linux-x64.deb`
   (use `apt`, not `dpkg -i`, so dependencies are pulled in). Other distros
   with glibc 2.39+ (2024 or newer, e.g. Fedora 40+): extract the `.tar.gz` and
@@ -71,7 +71,10 @@ Each release also carries `jekyllpress-<version>-macos.dmg`,
 
 What differs from Android: there is no camera, images come from a file dialog
 and are resized and stripped of EXIF by the app (JPEG, PNG, WebP and the like;
-HEIC is not supported), and video upload is macOS only.
+HEIC is converted on macOS, not on Linux), and video upload is macOS only. The
+app keeps its data in `~/Library/Application Support/com.jekyllpress.jekyllpress`
+or `~/.local/share/com.jekyllpress.jekyllpress`; see [PRIVACY.md](PRIVACY.md)
+for what uninstalling leaves behind.
 
 ---
 
@@ -81,16 +84,18 @@ JekyllPress treats your GitHub repository like a headless CMS, via the GitHub
 REST API — no clone, no git commands, no merge conflicts.
 
 ### Writing & publishing
-- **Markdown editor** built for phones: internal scrolling, undo/redo, spell
-  check, sentence auto-capitalization, live preview tab.
+- **Markdown editor**: internal scrolling, undo/redo, live preview tab; spell
+  check and sentence auto-capitalization on Android.
 - **Front matter without YAML**: a Post settings sheet for date/time, layout,
   categories, and tags. Custom front matter fields on existing posts are
   preserved byte-exact. New posts default to minimal front matter (`title` +
   `date`) so your site's `_config.yml` defaults apply.
-- **Photos**: picked or shot in-app, compressed to ~1080p JPEG, EXIF/GPS
-  stripped, uploaded to your assets folder, markdown inserted automatically.
+- **Photos**: from the gallery or camera (a file dialog on desktop), resized to
+  1600px on the long edge, re-encoded as JPEG with EXIF/GPS stripped, uploaded
+  to your assets folder, markdown inserted automatically.
 - **Videos**: re-encoded to H.264 with the short edge capped at 640px (25MB
-  upload cap) and embedded with an HTML5 `<video>` snippet.
+  upload cap), recording location removed, embedded with an HTML5 `<video>`
+  snippet.
 - **YouTube**: paste a watch, youtu.be, Shorts or live link to embed the player.
 - **Jekyll drafts**: save to `_drafts` on GitHub, promote to post later.
 - **Local drafts & autosave**: every keystroke is safe; resume or discard on
@@ -118,7 +123,7 @@ REST API — no clone, no git commands, no merge conflicts.
 
 ### Option A — Sign in with GitHub (recommended)
 
-Install the APK, tap **Sign in with GitHub**, approve the 8-character code
+Open the app, choose **Sign in with GitHub**, approve the 8-character code
 (auto-copied) on `github.com/login/device`, and you're in. There is nothing to
 register and nothing to paste.
 
@@ -150,9 +155,10 @@ read/write on your blog repo) and paste it into the login screen's
 "Use a Personal Access Token instead" section. This is the option to pick if
 you want to hand JekyllPress access to exactly one repository.
 
-Either way, the credential is stored in Android's Keystore-backed encrypted
-storage (on desktop: the macOS keychain or the Linux Secret Service) and only
-ever sent to GitHub. See [PRIVACY.md](PRIVACY.md).
+Either way, the credential is stored in the system's credential store:
+Android's Keystore-backed encrypted storage, one macOS login-keychain item
+(service `com.jekyllpress.jekyllpress`), or the Linux Secret Service keyring.
+It is only ever sent to GitHub. See [PRIVACY.md](PRIVACY.md).
 
 ### Using your own OAuth App or GitHub App (forks, self-builders)
 

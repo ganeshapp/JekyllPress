@@ -18,7 +18,7 @@
          (possibly private) repositories - keep them out of device/cloud
          backups. The token already lives in Keystore-backed storage. -->
     <application
-        android:label="Jekyll Press"
+        android:label="JekyllPress"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
