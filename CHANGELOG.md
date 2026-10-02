@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.1 — 2026-10-02
+
+### Fixed
+- **macOS: the sign-in is stored under an app-specific keychain name.** It
+  used flutter_secure_storage's default service name, which any other app
+  built with the same plugin shares, so one app could trigger a keychain
+  password prompt for the other's token. Updating signs you out of the
+  desktop app once; sign in again. Android is unaffected.
+
 ## 2.2.0 — 2026-10-02
 
 ### Added

@@ -26,7 +26,13 @@ class SecureStorageService {
     ),
     // The data-protection keychain needs a provisioning profile, which an
     // ad-hoc signed build cannot have (-34018); use the login keychain.
-    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+    // accountName is the keychain service name. The plugin's default is shared
+    // by every app that uses it, so two such apps on one Mac would read each
+    // other's github_pat and macOS would demand the login keychain password.
+    mOptions: MacOsOptions(
+      useDataProtectionKeyChain: false,
+      accountName: 'com.jekyllpress.jekyllpress',
+    ),
   );
 
   /// Save the GitHub access token (PAT or device-flow access token)
