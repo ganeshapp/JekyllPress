@@ -940,7 +940,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openSourceTitle => 'Open Source';
 
   @override
-  String get openSourceBody => 'JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐';
+  String get openSourceBody => 'JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo';
 
   @override
   String get viewOnGitHub => 'View on GitHub';

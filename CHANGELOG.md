@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.1 — 2026-10-02
+## 2.2.1 — 2026-10-03
 
 ### Fixed
 - **Videos no longer carry their recording location.** The re-encoder

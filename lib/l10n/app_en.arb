@@ -1339,7 +1339,7 @@
   "@openSourceTitle": {
     "description": "About screen: open source section title"
   },
-  "openSourceBody": "JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐",
+  "openSourceBody": "JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo",
   "@openSourceBody": {
     "description": "About screen: open source section body"
   },
