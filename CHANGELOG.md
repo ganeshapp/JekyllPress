@@ -28,6 +28,10 @@
 - **macOS: HEIC photos (iPhone, Photos.app exports) are converted** with the
   system's `sips` before upload instead of being rejected after you picked
   them. Linux has no HEIC decoder and now says so plainly.
+- Desktop: a Refresh button in the folder browser (a mouse cannot
+  pull-to-refresh); every screen keeps its content at a readable width in a
+  wide window; Tab in the post body indents instead of jumping to the
+  toolbar; quitting on macOS waits for the pending autosave.
 
 ### Changed
 - GitHub API requests identify the app and its version in their User-Agent,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/desktop_content_width.dart';
 import '../../../l10n/l10n.dart';
 import '../../../core/utils/external_url.dart';
 
@@ -19,72 +20,74 @@ class AboutScreen extends StatelessWidget {
       body: Container(
         decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              _buildAppBar(context),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLogo(context),
-                      const SizedBox(height: 32),
-                      _buildSection(
-                        context,
-                        icon: Icons.info_outline_rounded,
-                        title: context.l10n.aboutSectionTitle,
-                        content: context.l10n.aboutSectionBody,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSection(
-                        context,
-                        icon: Icons.lightbulb_outline_rounded,
-                        title: context.l10n.motivationTitle,
-                        content: context.l10n.motivationBody,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSection(
-                        context,
-                        icon: Icons.play_circle_outline_rounded,
-                        title: context.l10n.howToUseTitle,
-                        content: context.l10n.howToUseBody,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSection(
-                        context,
-                        icon: Icons.warning_amber_rounded,
-                        title: context.l10n.limitationsTitle,
-                        content: context.l10n.limitationsBody,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSection(
-                        context,
-                        icon: Icons.privacy_tip_outlined,
-                        title: context.l10n.privacySectionTitle,
-                        content: context.l10n.privacySectionBody,
-                        actionLabel: context.l10n.readPrivacyPolicy,
-                        onAction: () => _launchUrl(context, _privacyUrl),
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSection(
-                        context,
-                        icon: Icons.code_rounded,
-                        title: context.l10n.openSourceTitle,
-                        content: context.l10n.openSourceBody,
-                        actionLabel: context.l10n.viewOnGitHub,
-                        onAction: () => _launchUrl(context, _githubUrl),
-                      ),
-                      const SizedBox(height: 32),
-                      _buildCreatorCard(context),
-                      const SizedBox(height: 32),
-                      _buildLicenseSection(context),
-                      const SizedBox(height: 48),
-                    ],
+          child: DesktopContentWidth(
+            child: CustomScrollView(
+              slivers: [
+                _buildAppBar(context),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLogo(context),
+                        const SizedBox(height: 32),
+                        _buildSection(
+                          context,
+                          icon: Icons.info_outline_rounded,
+                          title: context.l10n.aboutSectionTitle,
+                          content: context.l10n.aboutSectionBody,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSection(
+                          context,
+                          icon: Icons.lightbulb_outline_rounded,
+                          title: context.l10n.motivationTitle,
+                          content: context.l10n.motivationBody,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSection(
+                          context,
+                          icon: Icons.play_circle_outline_rounded,
+                          title: context.l10n.howToUseTitle,
+                          content: context.l10n.howToUseBody,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSection(
+                          context,
+                          icon: Icons.warning_amber_rounded,
+                          title: context.l10n.limitationsTitle,
+                          content: context.l10n.limitationsBody,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSection(
+                          context,
+                          icon: Icons.privacy_tip_outlined,
+                          title: context.l10n.privacySectionTitle,
+                          content: context.l10n.privacySectionBody,
+                          actionLabel: context.l10n.readPrivacyPolicy,
+                          onAction: () => _launchUrl(context, _privacyUrl),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSection(
+                          context,
+                          icon: Icons.code_rounded,
+                          title: context.l10n.openSourceTitle,
+                          content: context.l10n.openSourceBody,
+                          actionLabel: context.l10n.viewOnGitHub,
+                          onAction: () => _launchUrl(context, _githubUrl),
+                        ),
+                        const SizedBox(height: 32),
+                        _buildCreatorCard(context),
+                        const SizedBox(height: 32),
+                        _buildLicenseSection(context),
+                        const SizedBox(height: 48),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

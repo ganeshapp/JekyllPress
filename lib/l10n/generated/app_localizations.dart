@@ -681,6 +681,12 @@ abstract class AppLocalizations {
   /// **'Select Folder'**
   String get selectFolderTitle;
 
+  /// Reloads the folder list; a mouse cannot pull-to-refresh
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh folders'**
+  String get refreshFoldersTooltip;
+
   /// Tooltip of the new-folder icon button
   ///
   /// In en, this message translates to:

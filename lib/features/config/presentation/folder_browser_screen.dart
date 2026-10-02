@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/folder_browser_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/desktop_content_width.dart';
 import '../../../l10n/l10n.dart';
 
 /// Clean and validate a user-typed new-folder path relative to
@@ -159,15 +160,17 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
       body: Container(
         decoration: AppTheme.backgroundGradient(context),
         child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(browserState),
-              _buildBreadcrumb(browserState),
-              Expanded(
-                child: _buildFolderList(browserState),
-              ),
-              _buildSelectButton(browserState),
-            ],
+          child: DesktopContentWidth(
+            child: Column(
+              children: [
+                _buildHeader(browserState),
+                _buildBreadcrumb(browserState),
+                Expanded(
+                  child: _buildFolderList(browserState),
+                ),
+                _buildSelectButton(browserState),
+              ],
+            ),
           ),
         ),
       ),
@@ -207,6 +210,16 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
                 ),
               ),
             ),
+          IconButton(
+            onPressed: state.isLoading
+                ? null
+                : ref.read(folderBrowserNotifierProvider.notifier).refresh,
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: context.l10n.refreshFoldersTooltip,
+            style: IconButton.styleFrom(
+              foregroundColor: context.colorScheme.onSurfaceVariant,
+            ),
+          ),
           IconButton(
             onPressed: _promptNewFolder,
             icon: const Icon(Icons.create_new_folder_rounded),

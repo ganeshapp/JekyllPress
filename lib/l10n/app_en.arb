@@ -444,6 +444,10 @@
   "@selectFolderTitle": {
     "description": "Title of the repository folder browser"
   },
+  "refreshFoldersTooltip": "Refresh folders",
+  "@refreshFoldersTooltip": {
+    "description": "Reloads the folder list; a mouse cannot pull-to-refresh"
+  },
   "newFolderTooltip": "New folder",
   "@newFolderTooltip": {
     "description": "Tooltip of the new-folder icon button"

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,7 @@ import '../../../core/services/content_service.dart';
 import '../../../core/services/github_upload_service.dart';
 import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/desktop_content_width.dart';
 import '../../../core/utils/frontmatter_parser.dart';
 import '../../../core/utils/markdown_insert.dart';
 import '../../../core/utils/youtube.dart';
@@ -166,6 +168,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       // App is going to background - save immediately
       _saveImmediately();
     }
+  }
+
+  /// Desktop: the window's close button and Cmd+Q ask before terminating
+  /// (macOS; Flutter 3.29's Linux embedder has no such handshake), so the
+  /// pending autosave can finish instead of dying mid-write
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    await _saveImmediately();
+    return AppExitResponse.exit;
   }
 
   /// Save draft immediately (bypasses debounce).
@@ -1229,34 +1240,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         body: Container(
           decoration: AppTheme.backgroundGradient(context),
           child: SafeArea(
-            // Desktop: keep lines readable in a wide window
-            child: Center(
-              child: ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxWidth: isDesktop ? 900 : double.infinity),
-                child: Column(
-                  children: [
-                    _buildAppBar(),
-                    _buildTabBar(),
-                    Expanded(
-                      // IndexedStack keeps both tabs alive so Write scroll
-                      // position, undo history, and Preview scroll survive
-                      // tab switches
-                      child: ListenableBuilder(
-                        listenable: _tabController,
-                        builder: (context, _) {
-                          return IndexedStack(
-                            index: _tabController.index,
-                            children: [
-                              _buildWriteTab(),
-                              _buildPreviewTab(),
-                            ],
-                          );
-                        },
-                      ),
+            child: DesktopContentWidth(
+              child: Column(
+                children: [
+                  _buildAppBar(),
+                  _buildTabBar(),
+                  Expanded(
+                    // IndexedStack keeps both tabs alive so Write scroll
+                    // position, undo history, and Preview scroll survive
+                    // tab switches
+                    child: ListenableBuilder(
+                      listenable: _tabController,
+                      builder: (context, _) {
+                        return IndexedStack(
+                          index: _tabController.index,
+                          children: [
+                            _buildWriteTab(),
+                            _buildPreviewTab(),
+                          ],
+                        );
+                      },
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1583,55 +1589,69 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           // Body field - fills the remaining space and scrolls internally,
           // so a drag scrolls the editor instead of extending a selection
           Expanded(
-            child: Container(
-              decoration: AppTheme.cardGlow(context),
-              child: TextField(
-                controller: _bodyController,
-                focusNode: _bodyFocusNode,
-                scrollController: _bodyScrollController,
-                undoController: _undoController,
-                expands: true,
-                maxLines: null,
-                minLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                onTap: isDesktop ? null : _collapseCaretAfterTap,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                textCapitalization: TextCapitalization.sentences,
-                spellCheckConfiguration:
-                    isDesktop ? null : const SpellCheckConfiguration(),
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                  color: context.colorScheme.onSurface,
+            // Tab indents (two spaces: what kramdown nested lists need)
+            // instead of moving focus to the toolbar; Shift+Tab still leaves
+            // the field. macOS routes its native insertTab: selector here too.
+            child: Actions(
+              actions: {
+                NextFocusIntent: CallbackAction<NextFocusIntent>(
+                  onInvoke: (_) {
+                    _insertTextAtCursor('  ');
+                    return null;
+                  },
                 ),
-                decoration: InputDecoration(
-                  hintText: context.l10n.bodyHint,
-                  hintStyle: TextStyle(
-                    color: context.colorScheme.onSurfaceVariant.withAlpha(150),
+              },
+              child: Container(
+                decoration: AppTheme.cardGlow(context),
+                child: TextField(
+                  controller: _bodyController,
+                  focusNode: _bodyFocusNode,
+                  scrollController: _bodyScrollController,
+                  undoController: _undoController,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  textAlignVertical: TextAlignVertical.top,
+                  onTap: isDesktop ? null : _collapseCaretAfterTap,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  textCapitalization: TextCapitalization.sentences,
+                  spellCheckConfiguration:
+                      isDesktop ? null : const SpellCheckConfiguration(),
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.6,
                     fontFamily: 'monospace',
+                    color: context.colorScheme.onSurface,
                   ),
-                  filled: true,
-                  fillColor: context.colorScheme.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: context.colorScheme.outline.withAlpha(80),
+                  decoration: InputDecoration(
+                    hintText: context.l10n.bodyHint,
+                    hintStyle: TextStyle(
+                      color:
+                          context.colorScheme.onSurfaceVariant.withAlpha(150),
+                      fontFamily: 'monospace',
                     ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: context.colorScheme.primary,
-                      width: 2,
+                    filled: true,
+                    fillColor: context.colorScheme.surfaceContainer,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
                     ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: context.colorScheme.outline.withAlpha(80),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: context.colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.all(18),
                   ),
-                  contentPadding: const EdgeInsets.all(18),
                 ),
               ),
             ),

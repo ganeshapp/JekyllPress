@@ -321,6 +321,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectFolderTitle => 'Select Folder';
 
   @override
+  String get refreshFoldersTooltip => 'Refresh folders';
+
+  @override
   String get newFolderTooltip => 'New folder';
 
   @override

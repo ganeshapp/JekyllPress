@@ -9,6 +9,7 @@ import '../../../core/repositories/repo_repository.dart';
 import '../../../core/services/content_service.dart';
 import '../../../core/services/secure_storage_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/desktop_content_width.dart';
 import '../../../l10n/l10n.dart';
 import '../../../core/utils/external_url.dart';
 import 'folder_browser_screen.dart';
@@ -471,46 +472,49 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen>
             opacity: _fadeIn,
             child: SlideTransition(
               position: _slideUp,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildHeader(user?.login),
-                            const SizedBox(height: 32),
-                            _buildSectionTitle(context.l10n.sectionRepository),
-                            _buildRepoSection(reposAsync),
-                            const SizedBox(height: 28),
-                            _buildSectionTitle(context.l10n.sectionBranch),
-                            _buildBranchSection(),
-                            const SizedBox(height: 28),
-                            _buildSectionTitle(context.l10n.sectionContent),
-                            _buildContentSection(),
-                            const SizedBox(height: 28),
-                            _buildSectionTitle(context.l10n.sectionSite),
-                            _buildSiteSection(),
-                            const SizedBox(height: 28),
-                            _buildSectionTitle(
-                                context.l10n.sectionFrontMatterDefaults),
-                            _buildFrontMatterSection(),
-                            const SizedBox(height: 40),
-                            _buildSaveButton(),
-                            const SizedBox(height: 16),
-                            if (_isEditMode)
-                              _buildCancelButton()
-                            else
-                              _buildLogoutButton(),
-                          ],
+              child: DesktopContentWidth(
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildHeader(user?.login),
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(
+                                  context.l10n.sectionRepository),
+                              _buildRepoSection(reposAsync),
+                              const SizedBox(height: 28),
+                              _buildSectionTitle(context.l10n.sectionBranch),
+                              _buildBranchSection(),
+                              const SizedBox(height: 28),
+                              _buildSectionTitle(context.l10n.sectionContent),
+                              _buildContentSection(),
+                              const SizedBox(height: 28),
+                              _buildSectionTitle(context.l10n.sectionSite),
+                              _buildSiteSection(),
+                              const SizedBox(height: 28),
+                              _buildSectionTitle(
+                                  context.l10n.sectionFrontMatterDefaults),
+                              _buildFrontMatterSection(),
+                              const SizedBox(height: 40),
+                              _buildSaveButton(),
+                              const SizedBox(height: 16),
+                              if (_isEditMode)
+                                _buildCancelButton()
+                              else
+                                _buildLogoutButton(),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

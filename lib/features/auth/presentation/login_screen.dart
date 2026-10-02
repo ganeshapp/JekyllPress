@@ -6,6 +6,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/dio_client.dart';
 import '../../../core/services/github_oauth_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/desktop_content_width.dart';
 import '../../../core/utils/token_format.dart';
 import '../../../l10n/l10n.dart';
 import '../../../core/utils/external_url.dart';
@@ -184,42 +185,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             child: SlideTransition(
               position: _slideUp,
               child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 32,
-                  ),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(),
-                        const SizedBox(height: 48),
-                        if (_showSetupCard) ...[
-                          _buildSetupCard(isLoading),
-                          const SizedBox(height: 24),
-                        ],
-                        _buildDeviceSignInButton(isLoading),
-                        if (errorMessage != null) ...[
-                          const SizedBox(height: 16),
-                          _buildErrorMessage(errorMessage),
-                        ],
-                        const SizedBox(height: 20),
-                        _buildPatToggle(isLoading),
-                        if (_showPatSection) ...[
-                          const SizedBox(height: 16),
-                          _buildTokenField(isLoading),
-                          if (_showFormatWarning) ...[
-                            const SizedBox(height: 12),
-                            _buildFormatWarning(),
+                child: DesktopContentWidth(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 32,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 48),
+                          if (_showSetupCard) ...[
+                            _buildSetupCard(isLoading),
+                            const SizedBox(height: 24),
+                          ],
+                          _buildDeviceSignInButton(isLoading),
+                          if (errorMessage != null) ...[
+                            const SizedBox(height: 16),
+                            _buildErrorMessage(errorMessage),
                           ],
                           const SizedBox(height: 20),
-                          _buildLoginButton(isLoading),
-                          const SizedBox(height: 8),
-                          _buildCreateTokenButton(isLoading),
+                          _buildPatToggle(isLoading),
+                          if (_showPatSection) ...[
+                            const SizedBox(height: 16),
+                            _buildTokenField(isLoading),
+                            if (_showFormatWarning) ...[
+                              const SizedBox(height: 12),
+                              _buildFormatWarning(),
+                            ],
+                            const SizedBox(height: 20),
+                            _buildLoginButton(isLoading),
+                            const SizedBox(height: 8),
+                            _buildCreateTokenButton(isLoading),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),

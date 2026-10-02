@@ -15,6 +15,7 @@ import '../../../core/providers/queue_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/desktop_content_width.dart';
 import '../../../core/utils/frontmatter_parser.dart';
 import '../../../core/utils/permalink.dart';
 import '../../../l10n/l10n.dart';
@@ -227,24 +228,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeIn,
-            child: Column(
-              children: [
-                _buildHeader(context, ref, user, config),
-                if (_isSearching) _buildSearchBar(),
-                if (publishQueue.isNotEmpty) _buildQueueBanner(publishQueue),
-                if (config != null && config.contentDirs.length > 1)
-                  _buildContentDirSwitcher(config),
-                _buildTabBar(draftsCount),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildContent(postsState, config),
-                      _buildDraftsContent(draftsState, postsState, config),
-                    ],
+            child: DesktopContentWidth(
+              child: Column(
+                children: [
+                  _buildHeader(context, ref, user, config),
+                  if (_isSearching) _buildSearchBar(),
+                  if (publishQueue.isNotEmpty) _buildQueueBanner(publishQueue),
+                  if (config != null && config.contentDirs.length > 1)
+                    _buildContentDirSwitcher(config),
+                  _buildTabBar(draftsCount),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildContent(postsState, config),
+                        _buildDraftsContent(draftsState, postsState, config),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
