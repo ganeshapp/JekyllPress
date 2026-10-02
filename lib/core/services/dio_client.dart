@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../providers/auth_provider.dart';
 import 'github_oauth_service.dart';
@@ -87,8 +88,10 @@ class ApiClient {
       headers: {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': _userAgent(),
       },
     ));
+    _addVersionToUserAgent();
 
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: _onRequest,
@@ -105,6 +108,21 @@ class ApiClient {
         responseBody: false,
         error: true,
       ));
+    }
+  }
+
+  /// GitHub asks API clients to say who they are, so it can reach the
+  /// owner about problems. The version arrives after an async plugin call.
+  static String _userAgent([String version = '']) =>
+      'JekyllPress${version.isEmpty ? '' : '/$version'} '
+      '(+https://github.com/ganeshapp/JekyllPress)';
+
+  Future<void> _addVersionToUserAgent() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      dio.options.headers['User-Agent'] = _userAgent(info.version);
+    } catch (_) {
+      // No platform (tests): the versionless agent still names the app
     }
   }
 

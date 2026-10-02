@@ -93,6 +93,9 @@ void main() {
       expect(seen!.uri.host, 'api.github.com');
       expect(seen!.headers['Accept'], 'application/vnd.github+json');
       expect(seen!.headers['X-GitHub-Api-Version'], '2022-11-28');
+      // GitHub asks clients to name themselves
+      expect(seen!.headers['User-Agent'],
+          startsWith('JekyllPress (+https://github.com/ganeshapp/JekyllPress'));
     });
   });
 

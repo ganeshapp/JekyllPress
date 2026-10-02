@@ -20,6 +20,10 @@
   build tools came or went. Data in the old `~/.local/share/jekyllpress`
   folder is moved over on first launch.
 
+### Changed
+- GitHub API requests identify the app and its version in their User-Agent,
+  as GitHub asks.
+
 ## 2.2.0 — 2026-10-02
 
 ### Added
