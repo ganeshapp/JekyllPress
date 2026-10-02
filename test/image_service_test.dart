@@ -122,5 +122,13 @@ void main() {
       final bogus = File('${dir.path}/in.heic')..writeAsStringSync('nope');
       expect(convertHeicWithSips(bogus.path, dir.path), throwsFormatException);
     }, skip: skip);
+
+    test('a missing folder is refused before sips can write a file there',
+        () async {
+      final missing = '${dir.path}/missing';
+      await expectLater(
+          convertHeicWithSips('${dir.path}/in.heic', missing), throwsArgumentError);
+      expect(FileSystemEntity.typeSync(missing), FileSystemEntityType.notFound);
+    });
   });
 }

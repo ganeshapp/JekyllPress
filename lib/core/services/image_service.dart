@@ -266,9 +266,14 @@ bool isHeic(String file) =>
     const {'.heic', '.heif'}.contains(path.extension(file).toLowerCase());
 
 /// macOS: decode a HEIC with the system's own `sips` (on every Mac) into a
-/// near-lossless JPEG in [dir]; [encodeJpeg] then resizes it and drops the
-/// metadata. The caller deletes the result.
+/// near-lossless JPEG in [dir], an existing folder; [encodeJpeg] then resizes
+/// it and drops the metadata. The caller deletes the result.
 Future<File> convertHeicWithSips(String source, String dir) async {
+  // Given a missing folder, sips writes the JPEG at the folder's path and
+  // every later conversion fails
+  if (!FileSystemEntity.isDirectorySync(dir)) {
+    throw ArgumentError.value(dir, 'dir', 'must be an existing folder');
+  }
   final out = File(path.join(
       dir, 'heic_${DateTime.now().microsecondsSinceEpoch}.jpg'));
   final result = await Process.run('sips', [

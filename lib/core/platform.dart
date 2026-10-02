@@ -32,11 +32,16 @@ Future<Directory> appDataDir({Map<String, String>? env}) async {
       : getApplicationDocumentsDirectory();
 }
 
-/// Scratch space for files made on the way to an upload (HEIC conversion).
-/// On desktop never /tmp, which other users and apps can read.
+/// Scratch space for files made on the way to an upload (HEIC conversion),
+/// created if missing: path_provider only names the macOS folder, and the
+/// OS may purge it. On desktop never /tmp, which other users and apps can
+/// read.
 Future<Directory> appCacheDir({Map<String, String>? env}) async {
   if (isLinux) return _private(_xdgDir('XDG_CACHE_HOME', '.cache', env));
-  return isMacOS ? getApplicationCacheDirectory() : getTemporaryDirectory();
+  final dir = await (isMacOS
+      ? getApplicationCacheDirectory()
+      : getTemporaryDirectory());
+  return dir.create(recursive: true);
 }
 
 /// ${variable:-~/fallback}/appId. Computed here, not by path_provider, whose
