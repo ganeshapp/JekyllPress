@@ -591,7 +591,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String emptyPostsBody(String folder) {
-    return 'Your $folder folder is empty.\nTap the button below to create your first post!';
+    return 'Your $folder folder is empty.\nUse the + button to create your first post!';
   }
 
   @override
@@ -893,7 +893,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customFieldsPreservedNote => 'These fields are preserved as-is when you publish';
 
   @override
-  String get aboutAppName => 'Jekyll Press';
+  String get aboutAppName => 'JekyllPress';
 
   @override
   String get versionLoading => 'Version …';
@@ -904,7 +904,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aboutSectionTitle => 'About Jekyll Press';
+  String get aboutSectionTitle => 'About JekyllPress';
 
   @override
   String get aboutSectionBody => 'JekyllPress is a CMS for any Jekyll blog hosted on GitHub. Write, edit, and publish posts from your phone or your desktop — no clone, no git commands.\n\nBuilt with Flutter and powered by the GitHub REST API, it works with your repository as-is: your posts folder, drafts, collections, branch, and front matter conventions are all configurable.';
@@ -940,7 +940,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openSourceTitle => 'Open Source';
 
   @override
-  String get openSourceBody => 'Jekyll Press is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐';
+  String get openSourceBody => 'JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐';
 
   @override
   String get viewOnGitHub => 'View on GitHub';

@@ -234,7 +234,7 @@ void main() {
       );
 
       expect(result, isA<DeleteFailure>());
-      expect((result as DeleteFailure).message, contains('Pull to refresh'));
+      expect((result as DeleteFailure).message, contains('Refresh the post list'));
     });
 
     test('non-conflict errors surface the GitHub message', () async {

@@ -279,7 +279,7 @@ class PublishNotifier extends _$PublishNotifier {
     final sha = draft.sha;
     if (fileName == null || filePath == null || sha == null) {
       return 'This draft is missing its GitHub file info - '
-          'pull to refresh and retry';
+          'refresh the post list and retry';
     }
 
     final uploadService = ref.read(githubUploadServiceProvider);
@@ -358,7 +358,7 @@ class PublishNotifier extends _$PublishNotifier {
     final sha = post.sha;
     if (path == null || sha == null) {
       return 'This post is missing its GitHub file info - '
-          'pull to refresh and retry';
+          'refresh the post list and retry';
     }
 
     final result = await ref.read(githubUploadServiceProvider).deleteFile(

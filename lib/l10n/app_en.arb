@@ -846,7 +846,7 @@
   "@noPostsYet": {
     "description": "Empty-state title of the Published tab"
   },
-  "emptyPostsBody": "Your {folder} folder is empty.\nTap the button below to create your first post!",
+  "emptyPostsBody": "Your {folder} folder is empty.\nUse the + button to create your first post!",
   "@emptyPostsBody": {
     "description": "Empty-state body of the Published tab",
     "placeholders": {
@@ -1269,7 +1269,7 @@
   "@customFieldsPreservedNote": {
     "description": "Caption under the custom front matter preview"
   },
-  "aboutAppName": "Jekyll Press",
+  "aboutAppName": "JekyllPress",
   "@aboutAppName": {
     "description": "App display name on the About screen. Do not translate."
   },
@@ -1291,7 +1291,7 @@
       }
     }
   },
-  "aboutSectionTitle": "About Jekyll Press",
+  "aboutSectionTitle": "About JekyllPress",
   "@aboutSectionTitle": {
     "description": "About screen: intro section title"
   },
@@ -1339,7 +1339,7 @@
   "@openSourceTitle": {
     "description": "About screen: open source section title"
   },
-  "openSourceBody": "Jekyll Press is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐",
+  "openSourceBody": "JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐",
   "@openSourceBody": {
     "description": "About screen: open source section body"
   },

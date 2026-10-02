@@ -14,10 +14,11 @@
   flutter_secure_storage's default service name, which every app built with
   the plugin shares, so one app could trigger a keychain password prompt for
   another's token. One item also means at most one "Always Allow" prompt
-  after an update, not five. On first launch the items 2.2.0 left under the
-  shared name are moved into the app's own item (you stay signed in; macOS
-  may ask once per item) and deleted. Android and Linux use the same
-  one-item layout; existing sign-ins migrate on first read.
+  after an update, not five. On the first launch after 2.2.0 the items it
+  left under the shared name are moved into the app's own item when they are
+  this app's sign-in (you stay signed in; macOS may ask once per item) and
+  deleted; a fresh install deletes them without reading. Android and Linux
+  use the same one-item layout; existing sign-ins migrate on first read.
 - **Linux: the data folder is now always
   `~/.local/share/com.jekyllpress.jekyllpress`** (`$XDG_DATA_HOME` is
   honoured) and private to your user. It used to be named after the
@@ -31,11 +32,12 @@
 - Desktop: a Refresh button in the folder browser (a mouse cannot
   pull-to-refresh); every screen keeps its content at a readable width in a
   wide window; Tab in the post body indents instead of jumping to the
-  toolbar; quitting on macOS waits for the pending autosave.
+  toolbar; quitting on macOS waits for the pending autosave; conflict
+  messages say "refresh the post list", not "pull to refresh".
 - Copy that only made sense on a phone (About, the sign-in tagline, hints
   that said "tap") now fits a laptop too, and PRIVACY.md says what
-  uninstalling leaves behind on each OS. The Android launcher label matches
-  the app name ("JekyllPress").
+  uninstalling leaves behind on each OS. The Android launcher label and the
+  About screen match the app name ("JekyllPress").
 
 ### Changed
 - GitHub API requests identify the app and its version in their User-Agent,

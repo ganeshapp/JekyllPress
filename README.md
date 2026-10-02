@@ -20,7 +20,7 @@
   </a>
 </p>
 
-> Stop using VS Code to write blog posts. Stop fighting with Git on your phone.
+> Stop using VS Code to write blog posts. Stop fighting with Git to publish a post.
 
 ## Screenshots
 
@@ -62,7 +62,8 @@ Each release also carries `jekyllpress-<version>-macos.dmg`,
   in System Settings → Privacy & Security. Or run
   `xattr -dr com.apple.quarantine /Applications/JekyllPress.app`. After each
   update expect that step again, plus one keychain "Always Allow" prompt (the
-  sign-in is a single keychain item, `com.jekyllpress.jekyllpress`).
+  sign-in is a single keychain item, `com.jekyllpress.jekyllpress`; the first
+  launch after 2.2.0 may ask up to three times while it moves the old items).
 - **Ubuntu 24.04+ / Debian 13+**: `sudo apt install ./jekyllpress-<version>-linux-x64.deb`
   (use `apt`, not `dpkg -i`, so dependencies are pulled in). Other distros
   with glibc 2.39+ (2024 or newer, e.g. Fedora 40+): extract the `.tar.gz` and

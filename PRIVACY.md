@@ -31,7 +31,9 @@ On macOS and Linux they live in a folder readable by your user only:
 `~/Library/Application Support/com.jekyllpress.jekyllpress` or
 `~/.local/share/com.jekyllpress.jekyllpress` (`$XDG_DATA_HOME` if set). A photo
 being converted passes through `~/Library/Caches/com.jekyllpress.jekyllpress`
-or `~/.cache/com.jekyllpress.jekyllpress` and is deleted afterwards. These
+or `~/.cache/com.jekyllpress.jekyllpress` and is deleted afterwards; a video
+being compressed (macOS) passes through the system's per-user temporary folder
+and the compressed copy is deleted once it is in the app's folder. These
 folders are not excluded from Time Machine or other backups: sign out (which
 clears the cache) or delete the folder if you do not want cached post content
 in your backups.

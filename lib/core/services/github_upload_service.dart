@@ -226,7 +226,7 @@ class GitHubUploadService {
 
       // Stale sha: re-fetch the current sha once and retry the PUT once
       const staleFailure = UploadFailure(
-        'This post changed on GitHub since it was loaded. Pull to refresh and retry.',
+        'This post changed on GitHub since it was loaded. Refresh the post list and retry.',
         kind: PublishErrorKind.conflict,
       );
       final freshSha = await _fetchCurrentSha(
@@ -297,7 +297,7 @@ class GitHubUploadService {
 
       // Stale sha: re-fetch the current sha once and retry the DELETE once
       const staleMessage =
-          'This post changed on GitHub since it was loaded. Pull to refresh and retry.';
+          'This post changed on GitHub since it was loaded. Refresh the post list and retry.';
       final freshSha = await _fetchCurrentSha(config: config, filePath: path);
       if (freshSha == null) {
         return const DeleteFailure(staleMessage);
@@ -394,7 +394,7 @@ class GitHubUploadService {
           return UploadFailure('Permission denied: $message');
         } else if (statusCode == 409) {
           return UploadFailure(
-              'Conflict: $message. Pull to refresh and retry.');
+              'Conflict: $message. Refresh the post list and retry.');
         } else if (statusCode == 422) {
           return UploadFailure('Invalid request: $message');
         }

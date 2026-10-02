@@ -1134,7 +1134,7 @@ abstract class AppLocalizations {
   /// Empty-state body of the Published tab
   ///
   /// In en, this message translates to:
-  /// **'Your {folder} folder is empty.\nTap the button below to create your first post!'**
+  /// **'Your {folder} folder is empty.\nUse the + button to create your first post!'**
   String emptyPostsBody(String folder);
 
   /// Hint chip in the Published tab empty state
@@ -1692,7 +1692,7 @@ abstract class AppLocalizations {
   /// App display name on the About screen. Do not translate.
   ///
   /// In en, this message translates to:
-  /// **'Jekyll Press'**
+  /// **'JekyllPress'**
   String get aboutAppName;
 
   /// Version badge while the package info loads
@@ -1710,7 +1710,7 @@ abstract class AppLocalizations {
   /// About screen: intro section title
   ///
   /// In en, this message translates to:
-  /// **'About Jekyll Press'**
+  /// **'About JekyllPress'**
   String get aboutSectionTitle;
 
   /// About screen: intro section body
@@ -1782,7 +1782,7 @@ abstract class AppLocalizations {
   /// About screen: open source section body
   ///
   /// In en, this message translates to:
-  /// **'Jekyll Press is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐'**
+  /// **'JekyllPress is open source under the MIT License. Found a bug or have a feature request? Head over to GitHub to:\n\n• Report issues\n• Request features\n• Contribute code\n• Star the repo ⭐'**
   String get openSourceBody;
 
   /// Button opening the project repository
