@@ -1,7 +1,82 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:jekyllpress/core/services/secure_storage_service.dart';
+
+/// In-memory stand-in for the flutter_secure_storage plugin, so the real
+/// [SecureStorageService] (its JSON item, migration, cache) can be tested.
+/// [locked] throws on every call, like a Linux keyring that is absent or
+/// whose unlock the user cancelled, or a denied macOS keychain prompt.
+class MemoryStorage extends FlutterSecureStorage {
+  final Map<String, String> items;
+  final bool locked;
+  int writes = 0;
+
+  MemoryStorage([Map<String, String>? items, this.locked = false])
+      : items = items ?? {};
+
+  void _check() {
+    if (locked) throw PlatformException(code: 'Libsecret error');
+  }
+
+  @override
+  Future<String?> read({
+    required String key,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    _check();
+    return items[key];
+  }
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    _check();
+    writes++;
+    items[key] = value!;
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    _check();
+    items.remove(key);
+  }
+
+  /// On macOS the shared default service holds other apps' items too
+  @override
+  Future<void> deleteAll({
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    fail('deleteAll must never be called');
+  }
+}
 
 /// In-memory SecureStorageService that never touches platform channels
 class FakeSecureStorage extends SecureStorageService {
@@ -70,6 +145,20 @@ class FakeSecureStorage extends SecureStorageService {
   Future<void> saveAccessTokenExpiry(DateTime? expiry) async {
     accessTokenExpiry = expiry;
     writeLog.add('accessTokenExpiry');
+  }
+
+  /// One write in the real service, so one log entry here
+  @override
+  Future<void> saveDeviceFlowTokens({
+    required String accessToken,
+    String? refreshToken,
+    DateTime? accessTokenExpiry,
+  }) async {
+    this.refreshToken = refreshToken;
+    this.accessTokenExpiry = accessTokenExpiry;
+    token = accessToken;
+    authMethod = AuthMethods.device;
+    writeLog.add('deviceFlowTokens');
   }
 }
 

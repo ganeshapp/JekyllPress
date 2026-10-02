@@ -8,6 +8,7 @@ import 'core/models/blog_post.dart';
 import 'core/models/local_draft.dart';
 import 'core/platform.dart';
 import 'core/providers/theme_provider.dart';
+import 'core/services/secure_storage_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_wrapper.dart';
 import 'l10n/l10n.dart';
@@ -31,7 +32,14 @@ void main() async {
   // Offline publish queue - plain-map entries, no TypeAdapter
   await Hive.openBox<Map>('publish_queue');
   // App-level settings (theme mode override)
-  await Hive.openBox<String>('app_settings');
+  final settings = await Hive.openBox<String>('app_settings');
+
+  // macOS, once: 2.2.0 kept its sign-in under the plugin's shared keychain
+  // service. Move it into this app's own item and delete the shared ones.
+  if (isMacOS && settings.get('shared_keychain_cleaned') == null) {
+    await SecureStorageService().adoptSharedServiceItems();
+    await settings.put('shared_keychain_cleaned', 'true');
+  }
 
   runApp(
     const ProviderScope(

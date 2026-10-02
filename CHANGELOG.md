@@ -3,11 +3,15 @@
 ## 2.2.1 — 2026-10-02
 
 ### Fixed
-- **macOS: the sign-in is stored under an app-specific keychain name.** It
-  used flutter_secure_storage's default service name, which any other app
-  built with the same plugin shares, so one app could trigger a keychain
-  password prompt for the other's token. Updating signs you out of the
-  desktop app once; sign in again. Android is unaffected.
+- **macOS: the sign-in is one keychain item under an app-specific service
+  name** (`com.jekyllpress.jekyllpress`). It was five items under
+  flutter_secure_storage's default service name, which every app built with
+  the plugin shares, so one app could trigger a keychain password prompt for
+  another's token. One item also means at most one "Always Allow" prompt
+  after an update, not five. On first launch the items 2.2.0 left under the
+  shared name are moved into the app's own item (you stay signed in; macOS
+  may ask once per item) and deleted. Android and Linux use the same
+  one-item layout; existing sign-ins migrate on first read.
 - **Linux: the data folder is now always
   `~/.local/share/com.jekyllpress.jekyllpress`** (`$XDG_DATA_HOME` is
   honoured) and private to your user. It used to be named after the

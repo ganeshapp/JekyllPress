@@ -432,15 +432,14 @@ void main() {
       expect(expiresIn, inInclusiveRange(8 * 60 - 2, 8 * 60));
     });
 
-    test('rotation writes the new refresh token BEFORE the access token '
+    test('rotation persists the whole token set as ONE write '
         '(single-use refresh survives a crash mid-update)', () async {
       final storage = expiringStorage();
       final (apiClient, _) = client(storage, rotatedTokens);
 
       await apiClient.dio.get('/user');
 
-      expect(storage.writeLog,
-          ['refreshToken', 'accessTokenExpiry', 'token', 'authMethod']);
+      expect(storage.writeLog, ['deviceFlowTokens']);
     });
 
     test('single-flight: concurrent requests share one refresh', () async {

@@ -33,6 +33,16 @@ void main() {
       expect(await service.checkExistingAuth(), isA<AuthFailure>());
     });
 
+    test('the real service over a store that throws (denied keychain '
+        'prompt, no Secret Service) returns AuthFailure', () async {
+      final service = AuthService(
+        secureStorage: SecureStorageService(storage: MemoryStorage({}, true)),
+        dio: dioWithResponse((_) => jsonResponse(_userJson, 200)),
+      );
+
+      expect(await service.checkExistingAuth(), isA<AuthFailure>());
+    });
+
     test('stored token + 200 returns AuthSuccess with user', () async {
       final service = AuthService(
         secureStorage: FakeSecureStorage('ghp_token'),
