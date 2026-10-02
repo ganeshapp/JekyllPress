@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../config/github_app_config.dart';
+
 /// How the stored access token was obtained
 abstract final class AuthMethods {
   /// Personal Access Token pasted by the user
@@ -134,20 +136,31 @@ class SecureStorageService {
         _authMethod: AuthMethods.device,
       });
 
-  /// macOS, once per install: 2.2.0 wrote the five legacy items under the
-  /// plugin's shared default service. Adopt them as this app's session when
-  /// it has none (so the update does not sign the user out), then delete
-  /// them so they stop triggering other apps' keychain prompts. Every step
-  /// is best effort: the reads may prompt and be denied. Never deleteAll -
+  /// macOS, once per install. 2.2.0 wrote the five legacy items under the
+  /// plugin's shared default service, where every app built with the plugin
+  /// writes the same keys. Delete them so they stop triggering keychain
+  /// prompts. On an [upgrade] (this Mac ran 2.2.0) first adopt them as this
+  /// app's session, so the update does not sign the user out - but only a
+  /// session that is recognisably this app's: a PAT, or a device-flow token
+  /// issued to this app's client id (another app's would route later
+  /// refreshes through that app's OAuth registration). A fresh install never
+  /// reads: every read prompts, and whatever is there is another app's.
+  /// Every step is best effort - a prompt may be denied. Never deleteAll:
   /// the shared service holds other apps' items too.
-  Future<void> adoptSharedServiceItems() async {
-    try {
-      final legacy = await _readLegacy(_shared);
-      if (legacy[_token] != null && (await _session())[_token] == null) {
-        await _write({...await _session(), ...legacy});
+  Future<void> adoptSharedServiceItems({required bool upgrade}) async {
+    if (upgrade) {
+      try {
+        final legacy = await _readLegacy(_shared);
+        final own = legacy[_authMethod] == AuthMethods.pat ||
+            legacy[_clientId] == GitHubAppConfig.bundledClientId;
+        if (own &&
+            legacy[_token] != null &&
+            (await _session())[_token] == null) {
+          await _write({...await _session(), ...legacy});
+        }
+      } catch (_) {
+        // Denied, or this app's own item unreadable: still clean up below
       }
-    } catch (_) {
-      // Denied, or this app's own item unreadable: still clean up below
     }
     for (final key in legacyKeys) {
       try {

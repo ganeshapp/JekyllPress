@@ -11,6 +11,7 @@ import 'package:jekyllpress/core/services/secure_storage_service.dart';
 class MemoryStorage extends FlutterSecureStorage {
   final Map<String, String> items;
   final bool locked;
+  int reads = 0;
   int writes = 0;
 
   MemoryStorage([Map<String, String>? items, this.locked = false])
@@ -31,6 +32,7 @@ class MemoryStorage extends FlutterSecureStorage {
     WindowsOptions? wOptions,
   }) async {
     _check();
+    reads++;
     return items[key];
   }
 

@@ -18,6 +18,9 @@ void main() async {
 
   // Initialize Hive for local storage (== Hive.initFlutter() on Android)
   Hive.init((await appDataDir()).path);
+  // A 2.2.0 install already has this box; a fresh install must not read
+  // (and prompt for) other apps' items under the shared keychain service
+  final upgrade = isMacOS && await Hive.boxExists('app_settings');
 
   // Register Hive adapters
   Hive.registerAdapter(AppConfigAdapter());
@@ -37,7 +40,7 @@ void main() async {
   // macOS, once: 2.2.0 kept its sign-in under the plugin's shared keychain
   // service. Move it into this app's own item and delete the shared ones.
   if (isMacOS && settings.get('shared_keychain_cleaned') == null) {
-    await SecureStorageService().adoptSharedServiceItems();
+    await SecureStorageService().adoptSharedServiceItems(upgrade: upgrade);
     await settings.put('shared_keychain_cleaned', 'true');
   }
 
