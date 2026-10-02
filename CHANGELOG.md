@@ -40,6 +40,8 @@
 ### Changed
 - GitHub API requests identify the app and its version in their User-Agent,
   as GitHub asks.
+- The `.deb` recommends `gnome-keyring`, a Secret Service provider, which
+  signing in needs.
 
 ## 2.2.0 — 2026-10-02
 

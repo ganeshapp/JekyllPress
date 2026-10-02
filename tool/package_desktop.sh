@@ -50,10 +50,16 @@ EOF
   cat > "$ROOT/DEBIAN/control" <<EOF
 Package: $APP
 Version: $VERSION
+Section: web
+Priority: optional
 Architecture: amd64
 Maintainer: ganeshapp <ganeshapp@users.noreply.github.com>
+Homepage: https://github.com/ganeshapp/JekyllPress
 Depends: $DEPS
+Recommends: gnome-keyring
 Description: $SUMMARY
+ Write and publish posts to a Jekyll blog on GitHub. Signing in stores the
+ token in a Secret Service keyring such as gnome-keyring.
 EOF
   dpkg-deb --build --root-owner-group "$ROOT" "$OUT/$APP-$VERSION-linux-x64.deb"
   ;;
