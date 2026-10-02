@@ -8,6 +8,13 @@
   built with the same plugin shares, so one app could trigger a keychain
   password prompt for the other's token. Updating signs you out of the
   desktop app once; sign in again. Android is unaffected.
+- **Linux: the data folder is now always
+  `~/.local/share/com.jekyllpress.jekyllpress`** (`$XDG_DATA_HOME` is
+  honoured) and private to your user. It used to be named after the
+  executable or the app id depending on whether the GLib development package
+  was installed, so the repository setup and local drafts "disappeared" when
+  build tools came or went. Data in the old `~/.local/share/jekyllpress`
+  folder is moved over on first launch.
 
 ## 2.2.0 — 2026-10-02
 
