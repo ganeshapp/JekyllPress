@@ -8,15 +8,6 @@ import 'fakes.dart';
 
 const _session = SecureStorageService.sessionKey;
 
-/// The five items 2.2.1-and-earlier wrote, one per field
-const _legacyItems = {
-  'github_pat': 'ghu_old',
-  'auth_method': 'device',
-  'oauth_client_id': 'Iv1.old',
-  'refresh_token': 'ghr_old',
-  'access_token_expiry': '2026-10-03T10:00:00.000',
-};
-
 void main() {
   group('keychain options (regression: the shared default service)', () {
     test('the macOS service name is app-specific', () {
@@ -113,45 +104,6 @@ void main() {
         () async {
       final locked = SecureStorageService(storage: MemoryStorage({}, true));
       expect(locked.getToken(), throwsA(isA<Object>()));
-    });
-  });
-
-  group('migration from one item per field (2.2.1 and earlier)', () {
-    test('builds the session on first read and deletes the five items',
-        () async {
-      final storage = MemoryStorage({..._legacyItems});
-      final service = SecureStorageService(storage: storage);
-
-      expect(await service.getToken(), 'ghu_old');
-      expect(await service.getAuthMethod(), 'device');
-      expect(await service.getClientId(), 'Iv1.old');
-      expect(await service.getRefreshToken(), 'ghr_old');
-      expect(await service.getAccessTokenExpiry(),
-          DateTime(2026, 10, 3, 10));
-      expect(storage.items.keys, [_session]);
-    });
-
-    test('a partial legacy session (PAT: token + method) migrates too',
-        () async {
-      final storage = MemoryStorage({
-        'github_pat': 'ghp_old',
-        'auth_method': 'pat',
-      });
-      final service = SecureStorageService(storage: storage);
-
-      expect(await service.getToken(), 'ghp_old');
-      expect(await service.getRefreshToken(), isNull);
-      expect(jsonDecode(storage.items[_session]!), {
-        'token': 'ghp_old',
-        'authMethod': 'pat',
-      });
-    });
-
-    test('nothing stored stays nothing stored', () async {
-      final storage = MemoryStorage();
-      final service = SecureStorageService(storage: storage);
-      expect(await service.getToken(), isNull);
-      expect(storage.items, isEmpty);
     });
   });
 }

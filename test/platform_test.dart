@@ -60,31 +60,6 @@ void main() {
           (await appDataDir(env: env)).path);
     });
 
-    test("2.2.0's executable-name folder is moved over, once", () async {
-      final old = Directory(p.join(home.path, '.local/share/jekyllpress'))
-        ..createSync(recursive: true);
-      File(p.join(old.path, 'app_config.hive')).writeAsStringSync('config');
-
-      final dir = await appDataDir(env: env);
-
-      expect(File(p.join(dir.path, 'app_config.hive')).readAsStringSync(),
-          'config');
-      expect(old.existsSync(), isFalse);
-    });
-
-    test('an old folder next to an existing new one is left alone',
-        () async {
-      final dir = await appDataDir(env: env);
-      File(p.join(dir.path, 'app_config.hive')).writeAsStringSync('new');
-      final old = Directory(p.join(home.path, '.local/share/jekyllpress'))
-        ..createSync(recursive: true);
-
-      await appDataDir(env: env);
-
-      expect(File(p.join(dir.path, 'app_config.hive')).readAsStringSync(),
-          'new');
-      expect(old.existsSync(), isTrue);
-    });
   });
 
   test('platform gates', () {

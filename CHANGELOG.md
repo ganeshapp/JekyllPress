@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.3 — 2026-10-10
+
+### Changed
+- **No migration code.** The steps that folded a 2.2.1-or-earlier sign-in
+  into the single keychain item and moved 2.2.0's Linux data folder are gone;
+  the app only reads and writes its current locations. Coming from 2.2.1 or
+  earlier means signing in once.
+
 ## 2.2.2 — 2026-10-10
 
 ### Fixed

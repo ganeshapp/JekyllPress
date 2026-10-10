@@ -20,12 +20,7 @@ const appId = 'com.jekyllpress.jekyllpress';
 /// ~/Documents. [env] is for tests.
 Future<Directory> appDataDir({Map<String, String>? env}) async {
   if (isLinux) {
-    final dir = _xdgDir('XDG_DATA_HOME', '.local/share', env);
-    // 2.2.0 built without libglib2.0-dev kept its data under the executable
-    // name: move it rather than look in two places forever
-    final old = Directory(p.join(dir.parent.path, 'jekyllpress'));
-    if (!dir.existsSync() && old.existsSync()) old.renameSync(dir.path);
-    return _private(dir);
+    return _private(_xdgDir('XDG_DATA_HOME', '.local/share', env));
   }
   return isMacOS
       ? getApplicationSupportDirectory()

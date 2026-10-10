@@ -1,6 +1,6 @@
 # JekyllPress Privacy Policy
 
-_Last updated: 2026-10-10 (v2.2.2)_
+_Last updated: 2026-10-10 (v2.2.3)_
 
 JekyllPress is an open-source app for Android, macOS and Linux that publishes
 posts to a Jekyll blog hosted in **your own GitHub repository**. It is designed

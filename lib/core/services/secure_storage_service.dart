@@ -29,16 +29,6 @@ class SecureStorageService {
   static const _clientId = 'clientId';
   static const _refreshToken = 'refreshToken';
   static const _expiry = 'expiry';
-  static const _fields = [_token, _authMethod, _clientId, _refreshToken, _expiry];
-
-  /// 2.2.1-and-earlier layout: one item per field, in [_fields] order
-  static const legacyKeys = [
-    'github_pat',
-    'auth_method',
-    'oauth_client_id',
-    'refresh_token',
-    'access_token_expiry',
-  ];
 
   /// Keychain service name (macOS). The plugin's default is shared by every
   /// app built with it, so two such apps on one Mac would read each other's
@@ -128,22 +118,12 @@ class SecureStorageService {
         _authMethod: AuthMethods.device,
       });
 
-  /// The session, migrating the one-item-per-field layout of 2.2.1 and
-  /// earlier on first read
+  /// The session: one JSON item, read once per instance
   Future<Map<String, String>> _session() async {
     if (_cache case final cached?) return cached;
     final json = await _storage.read(key: sessionKey);
-    if (json != null) {
-      return _cache = Map<String, String>.from(jsonDecode(json) as Map);
-    }
-    final legacy = await _readLegacy(_storage);
-    if (legacy.isNotEmpty) {
-      await _write(legacy);
-      for (final key in legacyKeys) {
-        await _storage.delete(key: key);
-      }
-    }
-    return _cache = legacy;
+    if (json == null) return _cache = {};
+    return _cache = Map<String, String>.from(jsonDecode(json) as Map);
   }
 
   /// Apply [changes] (null removes a field) and persist the result
@@ -162,15 +142,5 @@ class SecureStorageService {
       await _storage.write(key: sessionKey, value: jsonEncode(session));
     }
     _cache = session;
-  }
-
-  static Future<Map<String, String>> _readLegacy(
-      FlutterSecureStorage storage) async {
-    final session = <String, String>{};
-    for (var i = 0; i < legacyKeys.length; i++) {
-      final value = await storage.read(key: legacyKeys[i]);
-      if (value != null) session[_fields[i]] = value;
-    }
-    return session;
   }
 }
