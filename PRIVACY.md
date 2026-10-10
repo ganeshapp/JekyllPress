@@ -90,8 +90,7 @@ keychain or keyring item in place. Sign out first (it deletes the token and the
 cached content), then delete the folder. The keychain item is listed under
 `com.jekyllpress.jekyllpress` in Keychain Access; the keyring item under
 `com.jekyllpress.jekyllpress/FlutterSecureStorage` in Passwords and Keys
-(Seahorse). 2.2.0 also left items under `flutter_secure_storage_service` in the
-login keychain, which later versions never touch; delete them there as well.
+(Seahorse).
 
 ## Your GitHub token
 

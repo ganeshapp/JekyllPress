@@ -8,8 +8,6 @@
   flutter_secure_storage app shares, and macOS asked for the login keychain
   password for each access, even on a fresh install. JekyllPress now never
   touches that shared name, so updating from 2.2.0 means signing in once.
-  The leftover items are harmless; to remove them, search
-  `flutter_secure_storage_service` in Keychain Access.
 
 ## 2.2.1 — 2026-10-03
 
