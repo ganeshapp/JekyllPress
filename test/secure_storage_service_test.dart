@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jekyllpress/core/config/github_app_config.dart';
 import 'package:jekyllpress/core/services/secure_storage_service.dart';
 
 import 'fakes.dart';
@@ -24,12 +23,6 @@ void main() {
       final params = SecureStorageService.macOsOptions.params;
       expect(params['accountName'], 'com.jekyllpress.jekyllpress');
       expect(params['accountName'], isNot(AppleOptions.defaultAccountName));
-      expect(params['useDataProtectionKeyChain'], 'false');
-    });
-
-    test('the legacy cleanup targets the plugin default service', () {
-      final params = SecureStorageService.sharedMacOsOptions.params;
-      expect(params['accountName'], AppleOptions.defaultAccountName);
       expect(params['useDataProtectionKeyChain'], 'false');
     });
   });
@@ -159,103 +152,6 @@ void main() {
       final service = SecureStorageService(storage: storage);
       expect(await service.getToken(), isNull);
       expect(storage.items, isEmpty);
-    });
-  });
-
-  group('adoptSharedServiceItems (macOS, 2.2.0 shared keychain service)', () {
-    const pat = {'github_pat': 'ghp_old', 'auth_method': 'pat'};
-
-    test('an upgrade adopts a PAT session and deletes the items', () async {
-      final own = MemoryStorage();
-      final shared = MemoryStorage({...pat, 'other_app': 'keep'});
-      final service = SecureStorageService(storage: own, shared: shared);
-
-      await service.adoptSharedServiceItems(upgrade: true);
-
-      expect(await service.getToken(), 'ghp_old');
-      expect(await service.getAuthMethod(), AuthMethods.pat);
-      expect(own.items.keys, [_session]);
-      // Per-key deletes only: another app's item in the shared service
-      // survives
-      expect(shared.items, {'other_app': 'keep'});
-    });
-
-    test('an upgrade adopts a device-flow session issued to this app',
-        () async {
-      final own = MemoryStorage();
-      final shared = MemoryStorage({
-        ..._legacyItems,
-        'oauth_client_id': GitHubAppConfig.bundledClientId,
-      });
-      final service = SecureStorageService(storage: own, shared: shared);
-
-      await service.adoptSharedServiceItems(upgrade: true);
-
-      expect(await service.getToken(), 'ghu_old');
-      expect(await service.getRefreshToken(), 'ghr_old');
-      expect(await service.getClientId(), GitHubAppConfig.bundledClientId);
-      expect(shared.items, isEmpty);
-    });
-
-    test("another app's device-flow session is deleted, not adopted",
-        () async {
-      final own = MemoryStorage();
-      final shared = MemoryStorage({..._legacyItems}); // client id Iv1.old
-      final service = SecureStorageService(storage: own, shared: shared);
-
-      await service.adoptSharedServiceItems(upgrade: true);
-
-      expect(await service.getToken(), isNull);
-      expect(own.items, isEmpty);
-      expect(shared.items, isEmpty);
-    });
-
-    test('a fresh install never reads the shared service, only deletes',
-        () async {
-      final own = MemoryStorage();
-      final shared = MemoryStorage({...pat, 'other_app': 'keep'});
-      final service = SecureStorageService(storage: own, shared: shared);
-
-      await service.adoptSharedServiceItems(upgrade: false);
-
-      expect(shared.reads, 0);
-      expect(own.items, isEmpty);
-      expect(shared.items, {'other_app': 'keep'});
-    });
-
-    test('never overwrites an existing session, still deletes', () async {
-      final own = MemoryStorage({
-        _session: jsonEncode({'token': 'ghp_mine', 'authMethod': 'pat'}),
-      });
-      final shared = MemoryStorage({...pat});
-      final service = SecureStorageService(storage: own, shared: shared);
-
-      await service.adoptSharedServiceItems(upgrade: true);
-
-      expect(await service.getToken(), 'ghp_mine');
-      expect(shared.items, isEmpty);
-    });
-
-    test('a denied keychain prompt leaves the app signed out, no throw',
-        () async {
-      final own = MemoryStorage();
-      final service = SecureStorageService(
-        storage: own,
-        shared: MemoryStorage({...pat}, true),
-      );
-
-      await service.adoptSharedServiceItems(upgrade: true);
-
-      expect(await service.getToken(), isNull);
-      expect(own.items, isEmpty);
-    });
-
-    test('nothing in the shared service is a no-op', () async {
-      final own = MemoryStorage();
-      final service =
-          SecureStorageService(storage: own, shared: MemoryStorage());
-      await service.adoptSharedServiceItems(upgrade: true);
-      expect(own.items, isEmpty);
     });
   });
 }

@@ -1,6 +1,6 @@
 # JekyllPress Privacy Policy
 
-_Last updated: 2026-10-03 (v2.2.1)_
+_Last updated: 2026-10-10 (v2.2.2)_
 
 JekyllPress is an open-source app for Android, macOS and Linux that publishes
 posts to a Jekyll blog hosted in **your own GitHub repository**. It is designed
@@ -90,7 +90,8 @@ keychain or keyring item in place. Sign out first (it deletes the token and the
 cached content), then delete the folder. The keychain item is listed under
 `com.jekyllpress.jekyllpress` in Keychain Access; the keyring item under
 `com.jekyllpress.jekyllpress/FlutterSecureStorage` in Passwords and Keys
-(Seahorse).
+(Seahorse). 2.2.0 also left items under `flutter_secure_storage_service` in the
+login keychain, which later versions never touch; delete them there as well.
 
 ## Your GitHub token
 

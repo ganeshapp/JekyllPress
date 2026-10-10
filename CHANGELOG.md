@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.2 — 2026-10-10
+
+### Fixed
+- **No keychain password prompts on first launch.** 2.2.1 read and deleted
+  the items 2.2.0 had left under the keychain service name every
+  flutter_secure_storage app shares, and macOS asked for the login keychain
+  password for each access, even on a fresh install. JekyllPress now never
+  touches that shared name, so updating from 2.2.0 means signing in once.
+  The leftover items are harmless; to remove them, search
+  `flutter_secure_storage_service` in Keychain Access.
+
 ## 2.2.1 — 2026-10-03
 
 ### Fixed

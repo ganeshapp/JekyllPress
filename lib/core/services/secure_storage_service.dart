@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../config/github_app_config.dart';
 
 /// How the stored access token was obtained
 abstract final class AuthMethods {
@@ -53,23 +52,16 @@ class SecureStorageService {
     accountName: keychainService,
   );
 
-  /// Where 2.2.0 wrote: the plugin's shared default service
-  static const sharedMacOsOptions = MacOsOptions(
-    useDataProtectionKeyChain: false,
-  );
-
   final FlutterSecureStorage _storage;
-  final FlutterSecureStorage _shared;
   Map<String, String>? _cache;
 
-  /// [storage] and [shared] are injection points for tests
-  SecureStorageService({FlutterSecureStorage? storage, FlutterSecureStorage? shared})
+  /// [storage] is an injection point for tests
+  SecureStorageService({FlutterSecureStorage? storage})
       : _storage = storage ??
             const FlutterSecureStorage(
               aOptions: AndroidOptions(encryptedSharedPreferences: true),
               mOptions: macOsOptions,
-            ),
-        _shared = shared ?? const FlutterSecureStorage(mOptions: sharedMacOsOptions);
+            );
 
   /// Save the GitHub access token (PAT or device-flow access token)
   Future<void> saveToken(String token) => _update({_token: token});
@@ -135,39 +127,6 @@ class SecureStorageService {
         _token: accessToken,
         _authMethod: AuthMethods.device,
       });
-
-  /// macOS, once per install. 2.2.0 wrote the five legacy items under the
-  /// plugin's shared default service, where every app built with the plugin
-  /// writes the same keys. Delete them so they stop triggering keychain
-  /// prompts. On an [upgrade] (this Mac ran 2.2.0) first adopt them as this
-  /// app's session, so the update does not sign the user out - but only a
-  /// session that is recognisably this app's: a PAT, or a device-flow token
-  /// issued to this app's client id (another app's would route later
-  /// refreshes through that app's OAuth registration). A fresh install never
-  /// reads: every read prompts, and whatever is there is another app's.
-  /// Every step is best effort - a prompt may be denied. Never deleteAll:
-  /// the shared service holds other apps' items too.
-  Future<void> adoptSharedServiceItems({required bool upgrade}) async {
-    if (upgrade) {
-      try {
-        final legacy = await _readLegacy(_shared);
-        final own = legacy[_authMethod] == AuthMethods.pat ||
-            legacy[_clientId] == GitHubAppConfig.bundledClientId;
-        if (own &&
-            legacy[_token] != null &&
-            (await _session())[_token] == null) {
-          await _write({...await _session(), ...legacy});
-        }
-      } catch (_) {
-        // Denied, or this app's own item unreadable: still clean up below
-      }
-    }
-    for (final key in legacyKeys) {
-      try {
-        await _shared.delete(key: key);
-      } catch (_) {}
-    }
-  }
 
   /// The session, migrating the one-item-per-field layout of 2.2.1 and
   /// earlier on first read
