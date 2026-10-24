@@ -6,7 +6,7 @@ part of 'publish_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$publishServiceHash() => r'8d1564d57accbeb3b323a64b64b02abddb79bf59';
+String _$publishServiceHash() => r'5a68a1d3c7f4473d26c457ae2fa72ca1bfe56f74';
 
 /// Provider for PublishService
 ///
@@ -25,7 +25,7 @@ final publishServiceProvider = AutoDisposeProvider<PublishService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PublishServiceRef = AutoDisposeProviderRef<PublishService>;
-String _$publishNotifierHash() => r'328bc4e459f0a320435ea6cd15ccaa1eb7066311';
+String _$publishNotifierHash() => r'5dba45cd25ac79a7f85a0d6149c8e160cd6d2638';
 
 /// Notifier for managing publish operations
 ///

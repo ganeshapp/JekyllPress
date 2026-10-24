@@ -27,13 +27,18 @@ class LocalDraftAdapter extends TypeAdapter<LocalDraft> {
       originalDate: fields[7] as String?,
       originalFrontmatter: fields[8] as String?,
       originalFilePath: fields[9] as String?,
+      publishDate: fields[10] as DateTime?,
+      layout: fields[11] as String?,
+      categories: (fields[12] as List?)?.cast<String>(),
+      tags: (fields[13] as List?)?.cast<String>(),
+      frontmatterEdited: fields[14] == null ? false : fields[14] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, LocalDraft obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +58,17 @@ class LocalDraftAdapter extends TypeAdapter<LocalDraft> {
       ..writeByte(8)
       ..write(obj.originalFrontmatter)
       ..writeByte(9)
-      ..write(obj.originalFilePath);
+      ..write(obj.originalFilePath)
+      ..writeByte(10)
+      ..write(obj.publishDate)
+      ..writeByte(11)
+      ..write(obj.layout)
+      ..writeByte(12)
+      ..write(obj.categories)
+      ..writeByte(13)
+      ..write(obj.tags)
+      ..writeByte(14)
+      ..write(obj.frontmatterEdited);
   }
 
   @override

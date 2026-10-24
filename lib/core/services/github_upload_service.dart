@@ -46,7 +46,12 @@ sealed class UploadResult {
 class UploadSuccess extends UploadResult {
   final String sha;
   final String htmlUrl;
-  const UploadSuccess({required this.sha, required this.htmlUrl});
+  final String? commitSha;
+  const UploadSuccess({
+    required this.sha,
+    required this.htmlUrl,
+    this.commitSha,
+  });
 }
 
 class UploadFailure extends UploadResult {
@@ -133,6 +138,7 @@ class GitHubUploadService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final content = response.data['content'];
         return UploadSuccess(
+          commitSha: response.data['commit']?['sha'] as String?,
           sha: content['sha'] as String,
           htmlUrl: content['html_url'] as String,
         );
@@ -189,7 +195,9 @@ class GitHubUploadService {
 
     Map<String, dynamic> buildBody(String? sha) {
       final body = <String, dynamic>{
-        'message': commitMessage ?? (existingSha != null ? 'Update: $filename' : 'Create: $filename'),
+        'message':
+            commitMessage ??
+            (existingSha != null ? 'Update: $filename' : 'Create: $filename'),
         'content': base64Content,
         'branch': config.branch,
       };
@@ -203,8 +211,8 @@ class GitHubUploadService {
     if (force) {
       // Overwrite-with-my-version: swap in the current sha (kept stale
       // when it cannot be read - the PUT then surfaces the real error)
-      sha = await _fetchCurrentSha(config: config, filePath: path) ??
-          existingSha;
+      sha =
+          await _fetchCurrentSha(config: config, filePath: path) ?? existingSha;
     }
 
     try {
@@ -216,7 +224,8 @@ class GitHubUploadService {
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode;
       final ghMessage = _extractGitHubMessage(e);
-      final isShaConflict = sha != null &&
+      final isShaConflict =
+          sha != null &&
           (statusCode == 409 ||
               (statusCode == 422 && ghMessage.toLowerCase().contains('sha')));
 
@@ -229,10 +238,7 @@ class GitHubUploadService {
         'This post changed on GitHub since it was loaded. Refresh the post list and retry.',
         kind: PublishErrorKind.conflict,
       );
-      final freshSha = await _fetchCurrentSha(
-        config: config,
-        filePath: path,
-      );
+      final freshSha = await _fetchCurrentSha(config: config, filePath: path);
       if (freshSha == null) {
         return staleFailure;
       }
@@ -289,7 +295,8 @@ class GitHubUploadService {
         return const DeleteSuccess();
       }
       final ghMessage = _extractGitHubMessage(e);
-      final isShaConflict = statusCode == 409 ||
+      final isShaConflict =
+          statusCode == 409 ||
           (statusCode == 422 && ghMessage.toLowerCase().contains('sha'));
       if (!isShaConflict) {
         return DeleteFailure(_handleDioError(e).message);
@@ -336,6 +343,7 @@ class GitHubUploadService {
     if (response.statusCode == 200 || response.statusCode == 201) {
       final responseContent = response.data['content'];
       return UploadSuccess(
+        commitSha: response.data['commit']?['sha'] as String?,
         sha: responseContent['sha'] as String,
         htmlUrl: responseContent['html_url'] as String,
       );
@@ -381,8 +389,10 @@ class GitHubUploadService {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return const UploadFailure('Upload timed out. Please try again.',
-            kind: PublishErrorKind.offline);
+        return const UploadFailure(
+          'Upload timed out. Please try again.',
+          kind: PublishErrorKind.offline,
+        );
       case DioExceptionType.badResponse:
         final statusCode = e.response?.statusCode;
         final ghMessage = _extractGitHubMessage(e);
@@ -394,14 +404,17 @@ class GitHubUploadService {
           return UploadFailure('Permission denied: $message');
         } else if (statusCode == 409) {
           return UploadFailure(
-              'Conflict: $message. Refresh the post list and retry.');
+            'Conflict: $message. Refresh the post list and retry.',
+          );
         } else if (statusCode == 422) {
           return UploadFailure('Invalid request: $message');
         }
         return UploadFailure('GitHub error ($statusCode): $message');
       case DioExceptionType.connectionError:
-        return const UploadFailure('No internet connection',
-            kind: PublishErrorKind.offline);
+        return const UploadFailure(
+          'No internet connection',
+          kind: PublishErrorKind.offline,
+        );
       default:
         return UploadFailure('Network error: ${e.message}');
     }

@@ -1,3 +1,4 @@
+import 'package:hive/hive.dart';
 import '../models/app_config.dart';
 import '../models/blog_post.dart';
 import '../utils/frontmatter_parser.dart';
@@ -16,12 +17,14 @@ class PublishSuccess extends PublishResult {
   /// Full repo-relative path the post was written to
   final String filePath;
   final String htmlUrl;
+  final String? commitSha;
 
   const PublishSuccess({
     required this.sha,
     required this.filename,
     required this.filePath,
     required this.htmlUrl,
+    this.commitSha,
   });
 }
 
@@ -37,8 +40,10 @@ class PublishFailure extends PublishResult {
 class PublishService {
   final GitHubUploadService _uploadService;
 
-  PublishService({required GitHubUploadService uploadService})
-      : _uploadService = uploadService;
+  final Box<Map>? attempts;
+
+  PublishService({required GitHubUploadService uploadService, this.attempts})
+    : _uploadService = uploadService;
 
   /// Create a new post in the active content dir (or [config.draftsPath]
   /// when [asDraft]). Generates filename, frontmatter, and uploads to
@@ -51,6 +56,7 @@ class PublishService {
   /// while an explicit '' / empty list (user cleared the field in the
   /// Post settings sheet) omits the key.
   Future<PublishResult> createPost({
+    String? attemptId,
     required AppConfig config,
     required String title,
     required String bodyContent,
@@ -65,40 +71,62 @@ class PublishService {
     }
 
     final targetDir = ContentService.cleanDir(
-        asDraft ? config.draftsPath : config.activeContentDir);
+      asDraft ? config.draftsPath : config.activeContentDir,
+    );
 
     // Generate date (a date-prefixed filename keeps the date-only prefix).
     // The chosen publish date drives the filename too - Jekyll derives the
     // post URL from it.
-    final now = publishDate ?? DateTime.now();
-    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final attemptKey =
+        attemptId == null
+            ? null
+            : 'create:${config.repoOwner}/${config.repoName}/${config.branch}/$attemptId';
+    final previous = attemptKey == null ? null : attempts?.get(attemptKey);
+    final now =
+        publishDate ??
+        (previous == null
+            ? null
+            : DateTime.tryParse(previous['date'] as String)) ??
+        DateTime.now();
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     // If the exact path is taken, suffix the slug -2..-9 until free
     final kebabTitle = toKebabCase(title, now: now);
     final stem =
-        usesDatePrefixedFilenames(targetDir) && !asDraft ? '$dateStr-$kebabTitle' : kebabTitle;
-    var filename = '$stem.md';
-    try {
-      var taken = await _uploadService.postExists(
-        config: config,
-        path: '$targetDir/$filename',
-      );
-      var suffix = 2;
-      while (taken && suffix <= 9) {
-        filename = '$stem-$suffix.md';
-        taken = await _uploadService.postExists(
+        usesDatePrefixedFilenames(targetDir) && !asDraft
+            ? '$dateStr-$kebabTitle'
+            : kebabTitle;
+    var filename =
+        previous == null
+            ? '$stem.md'
+            : (previous['path'] as String).split('/').last;
+    if (previous == null) {
+      try {
+        var taken = await _uploadService.postExists(
           config: config,
           path: '$targetDir/$filename',
         );
-        suffix++;
+        var suffix = 2;
+        while (taken && suffix <= 9) {
+          filename = '$stem-$suffix.md';
+          taken = await _uploadService.postExists(
+            config: config,
+            path: '$targetDir/$filename',
+          );
+          suffix++;
+        }
+        if (taken) {
+          return const PublishFailure(
+            'Too many posts with this title already exist for today. Please choose a different title.',
+          );
+        }
+      } catch (e) {
+        return PublishFailure(
+          'Could not check for existing posts: $e',
+          kind: publishErrorKindOf(e),
+        );
       }
-      if (taken) {
-        return const PublishFailure(
-            'Too many posts with this title already exist for today. Please choose a different title.');
-      }
-    } catch (e) {
-      return PublishFailure('Could not check for existing posts: $e',
-          kind: publishErrorKindOf(e));
     }
 
     // Generate minimal frontmatter (title + date; layout/categories/tags
@@ -113,28 +141,47 @@ class PublishService {
     );
 
     // Combine frontmatter and body
-    final fullContent = FrontmatterParser.combineContent(frontmatter, bodyContent);
+    final fullContent = FrontmatterParser.combineContent(
+      frontmatter,
+      bodyContent,
+    );
 
     // Upload to GitHub
-    final path = '$targetDir/$filename';
+    final path = previous?['path'] as String? ?? '$targetDir/$filename';
+    // Persist before PUT: a lost response must retry this destination, even
+    // after restart or when the draft is moved to the offline queue.
+    if (attemptKey != null && attempts != null) {
+      await attempts!.put(attemptKey, {
+        'path': path,
+        'date': now.toIso8601String(),
+      });
+    }
     final result = await _uploadService.uploadPost(
       config: config,
       path: path,
       content: fullContent,
-      existingSha: null, // New post
-      commitMessage:
-          asDraft ? 'Create draft: $title' : 'Create post: $title',
+      existingSha: null, // New post, or an ambiguous earlier create
+      force: previous != null,
+      commitMessage: asDraft ? 'Create draft: $title' : 'Create post: $title',
     );
 
     return switch (result) {
-      UploadSuccess(sha: final sha, htmlUrl: final url) => PublishSuccess(
+      UploadSuccess(
+        sha: final sha,
+        htmlUrl: final url,
+        commitSha: final commitSha,
+      ) =>
+        PublishSuccess(
           sha: sha,
+          commitSha: commitSha,
           filename: filename,
           filePath: path,
           htmlUrl: url,
         ),
-      UploadFailure(message: final msg, kind: final kind) =>
-        PublishFailure(msg, kind: kind),
+      UploadFailure(message: final msg, kind: final kind) => PublishFailure(
+        msg,
+        kind: kind,
+      ),
     };
   }
 
@@ -170,7 +217,8 @@ class PublishService {
     }
 
     final rawFrontmatter = originalPost.rawFrontmatter ?? '';
-    final hasEdits = publishDate != null ||
+    final hasEdits =
+        publishDate != null ||
         layout != null ||
         categories != null ||
         tags != null;
@@ -197,21 +245,22 @@ class PublishService {
       };
       final passthrough = <String, String>{
         for (final entry in parsed.passthrough.entries)
-          if (!overriddenKeys
-              .contains(entry.key.split('#').first.toLowerCase()))
+          if (!overriddenKeys.contains(
+            entry.key.split('#').first.toLowerCase(),
+          ))
             entry.key: entry.value,
       };
       frontmatter = FrontmatterParser.generateFrontmatterFields(
         // Title is locked for existing posts. Only emit a title line when
         // the original had one (or had no front matter at all) so a post
         // relying on a heading-derived title doesn't gain a bogus field.
-        title: parsed.title != null || !hadFrontmatter
-            ? originalPost.title
-            : null,
+        title:
+            parsed.title != null || !hadFrontmatter ? originalPost.title : null,
         // An untouched date keeps the original raw value verbatim
-        date: publishDate != null
-            ? formatJekyllDate(publishDate)
-            : parsed.date ?? (hadFrontmatter ? null : originalPost.date),
+        date:
+            publishDate != null
+                ? formatJekyllDate(publishDate)
+                : parsed.date ?? (hadFrontmatter ? null : originalPost.date),
         layout: layout ?? parsed.layout,
         categories: categories ?? parsed.categories,
         tags: tags ?? parsed.tags,
@@ -232,11 +281,15 @@ class PublishService {
     }
 
     // Combine frontmatter and new body
-    final fullContent = FrontmatterParser.combineContent(frontmatter, newBodyContent);
+    final fullContent = FrontmatterParser.combineContent(
+      frontmatter,
+      newBodyContent,
+    );
 
     // Write back to the post's own path; v1 cache records have no
     // filePath, so fall back to '<postsPath>/<fileName>'
-    final path = originalPost.filePath ??
+    final path =
+        originalPost.filePath ??
         '${ContentService.cleanDir(config.postsPath)}/${originalPost.fileName!}';
 
     // Upload to GitHub with SHA for update
@@ -250,14 +303,22 @@ class PublishService {
     );
 
     return switch (result) {
-      UploadSuccess(sha: final sha, htmlUrl: final url) => PublishSuccess(
+      UploadSuccess(
+        sha: final sha,
+        htmlUrl: final url,
+        commitSha: final commitSha,
+      ) =>
+        PublishSuccess(
           sha: sha,
+          commitSha: commitSha,
           filename: originalPost.fileName!,
           filePath: path,
           htmlUrl: url,
         ),
-      UploadFailure(message: final msg, kind: final kind) =>
-        PublishFailure(msg, kind: kind),
+      UploadFailure(message: final msg, kind: final kind) => PublishFailure(
+        msg,
+        kind: kind,
+      ),
     };
   }
 

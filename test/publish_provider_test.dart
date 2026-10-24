@@ -22,6 +22,7 @@ class _FakePublishService extends PublishService {
 
   @override
   Future<PublishResult> createPost({
+    String? attemptId,
     required AppConfig config,
     required String title,
     required String bodyContent,

@@ -149,6 +149,7 @@ void main() {
       }
       configBox = await Hive.openBox<AppConfig>('app_config');
       await Hive.openBox<String>('local_image_map');
+    await Hive.openBox<Map>('publishing_state');
       container = ProviderContainer();
     });
 

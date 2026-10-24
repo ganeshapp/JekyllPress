@@ -72,9 +72,44 @@ class ImageUploadStatus {
 /// subscribes/unsubscribes (overlays keep updating mid-upload)
 @Riverpod(keepAlive: true)
 class ImageManager extends _$ImageManager {
+  final Map<String, Future<void>> _inFlight = {};
+  int _generation = 0;
+  Box<Map> get _journal => Hive.box<Map>('publishing_state');
+
   @override
   Map<String, ImageUploadStatus> build() {
-    return {};
+    // Pending work is restored as retryable, never as an upload still running.
+    final localFiles = ref.read(localImageMapBoxProvider);
+    return {
+      for (final filename in localFiles.keys.cast<String>())
+        filename: ImageUploadStatus(
+          filename: filename,
+          isUploaded: _journal.get('media:$filename')?['uploaded'] == true,
+          error:
+              _journal.get('media:$filename')?['uploaded'] == true
+                  ? null
+                  : 'Upload unfinished. Retry before publishing.',
+        ),
+    };
+  }
+
+  Future<void> clearUploads() async {
+    _generation++;
+    _inFlight.clear();
+    await _journal.clear();
+    state = {};
+  }
+
+  /// Used by queued posts: their text must not reach GitHub ahead of media.
+  Future<String?> ensureUploaded(String body) async {
+    for (final entry in state.entries.toList()) {
+      if (!body.contains(entry.key) || entry.value.isUploaded) continue;
+      await retryUpload(entry.key);
+      if (state[entry.key]?.isUploaded != true) {
+        return state[entry.key]?.error ?? 'Media upload is unfinished';
+      }
+    }
+    return null;
   }
 
   /// Get current app config
@@ -87,9 +122,10 @@ class ImageManager extends _$ImageManager {
   /// Returns the filename for markdown insertion, or null if cancelled
   Future<String?> pickImage({bool fromCamera = false}) async {
     final imageService = ref.read(imageServiceProvider);
-    final result = fromCamera
-        ? await imageService.captureAndProcessImage()
-        : await imageService.pickAndProcessImage();
+    final result =
+        fromCamera
+            ? await imageService.captureAndProcessImage()
+            : await imageService.pickAndProcessImage();
 
     if (result == null) return null;
 
@@ -119,6 +155,8 @@ class ImageManager extends _$ImageManager {
     final box = ref.read(localImageMapBoxProvider);
     await box.put(result.filename, result.localPath);
 
+    await _journal.put('media:${result.filename}', {'uploaded': false});
+
     // Add to upload state
     state = {
       ...state,
@@ -130,7 +168,7 @@ class ImageManager extends _$ImageManager {
     };
 
     // Trigger background upload
-    _uploadMediaInBackground(result.filename, result.file);
+    retryUpload(result.filename);
 
     return result.filename;
   }
@@ -139,6 +177,7 @@ class ImageManager extends _$ImageManager {
   Future<void> _uploadMediaInBackground(String filename, File file) async {
     final config = _config;
     if (config == null) return;
+    final generation = _generation;
 
     // Mark as uploading
     state = {
@@ -155,11 +194,16 @@ class ImageManager extends _$ImageManager {
       config: config,
       file: file,
       filename: filename,
-      commitMessage: filename.endsWith('.mp4')
-          ? 'Add video: $filename'
-          : 'Add image: $filename',
+      commitMessage:
+          filename.endsWith('.mp4')
+              ? 'Add video: $filename'
+              : 'Add image: $filename',
     );
 
+    if (generation != _generation) return;
+    await _journal.put('media:$filename', {
+      'uploaded': result is UploadSuccess,
+    });
     // Update status based on result
     switch (result) {
       case UploadSuccess():
@@ -185,16 +229,26 @@ class ImageManager extends _$ImageManager {
   }
 
   /// Retry upload for a failed media file
-  Future<void> retryUpload(String filename) async {
-    final box = ref.read(localImageMapBoxProvider);
-    final localPath = box.get(filename);
+  Future<void> retryUpload(String filename) {
+    return _inFlight[filename] ??= _retryUpload(
+      filename,
+    ).whenComplete(() { _inFlight.remove(filename); });
+  }
 
-    if (localPath == null) return;
-
-    final file = File(localPath);
-    if (!await file.exists()) return;
-
-    await _uploadMediaInBackground(filename, file);
+  Future<void> _retryUpload(String filename) async {
+    final localPath = ref.read(localImageMapBoxProvider).get(filename);
+    if (localPath == null || !await File(localPath).exists()) {
+      state = {
+        ...state,
+        filename: ImageUploadStatus(
+          filename: filename,
+          error:
+              'The local media file is missing. Remove it from the post or add it again.',
+        ),
+      };
+      return;
+    }
+    await _uploadMediaInBackground(filename, File(localPath));
   }
 
   /// Generate markdown image syntax. The URL is root-relative and
@@ -254,9 +308,9 @@ final RegExp _embedBlockPattern = RegExp(
 String preprocessPreviewMarkdown(String markdown) {
   return markdown.replaceAllMapped(_embedBlockPattern, (match) {
     final block = match.group(0)!;
-    final src = RegExp(r'''src\s*=\s*["']([^"']+)["']''')
-        .firstMatch(block)
-        ?.group(1);
+    final src = RegExp(
+      r'''src\s*=\s*["']([^"']+)["']''',
+    ).firstMatch(block)?.group(1);
     if (match.group(1)!.toLowerCase() == 'video') {
       final filename = src?.split('/').last ?? '';
       return '![video]($videoPreviewScheme:/$filename)';
@@ -321,7 +375,8 @@ class ImageResolver extends _$ImageResolver {
         cleanPath = cleanPath.substring(1);
       }
 
-      final rawUrl = 'https://raw.githubusercontent.com/'
+      final rawUrl =
+          'https://raw.githubusercontent.com/'
           '${config.repoOwner}/${config.repoName}/${config.branch}/$cleanPath';
 
       return (false, rawUrl);

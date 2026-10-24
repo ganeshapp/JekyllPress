@@ -17,6 +17,7 @@ import '../../../core/providers/theme_provider.dart';
 import '../../../core/services/publish_queue_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/desktop_content_width.dart';
+import '../../../core/widgets/deployment_banner.dart';
 import '../../../core/utils/frontmatter_parser.dart';
 import '../../../core/utils/permalink.dart';
 import '../../../l10n/l10n.dart';
@@ -233,6 +234,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               child: Column(
                 children: [
                   _buildHeader(context, ref, user, config),
+                  const DeploymentBanner(),
                   if (_isSearching) _buildSearchBar(),
                   if (publishQueue.isNotEmpty) _buildQueueBanner(publishQueue),
                   if (config != null && config.contentDirs.length > 1)
@@ -752,6 +754,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     await ref.read(publishQueueNotifierProvider.notifier).clearAll();
     await ref.read(postsNotifierProvider.notifier).clearAll();
     await ref.read(draftsNotifierProvider.notifier).clearAll();
+    await ref.read(imageManagerProvider.notifier).clearUploads();
     await ref.read(localImageMapBoxProvider).clear();
     await ref.read(imageServiceProvider).clearAllLocalImages();
   }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.0 — 2026-10-24
+
+- Show Saved → Building → Live after publishing, with build failure details and a link to the deployed page.
+- Keep unfinished image and video uploads across restarts; queued posts upload their media before the text.
+- Save publication date, layout, categories and tags with local drafts, including settings-only edits.
+- Retry a new post at its original destination after a lost response, avoiding duplicate posts.
+
 ## 2.2.3 — 2026-10-10
 
 ### Changed

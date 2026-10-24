@@ -10,7 +10,9 @@ import '../services/github_upload_service.dart';
 import '../services/publish_queue_service.dart';
 import '../services/publish_service.dart';
 import 'config_provider.dart';
+import 'deployment_provider.dart';
 import 'drafts_provider.dart';
+import 'image_provider.dart';
 import 'posts_provider.dart';
 import 'publish_provider.dart';
 
@@ -52,18 +54,19 @@ class PublishQueueNotifier extends _$PublishQueueNotifier {
     final service = ref.watch(publishQueueServiceProvider);
 
     _connectivitySub?.cancel();
-    _connectivitySub = ref.watch(connectivityProvider).onConnectivityChanged.listen(
-      (results) {
-        if (results.any((r) => r != ConnectivityResult.none)) {
-          processQueue();
-        }
-      },
-      // Platform-channel hiccups must never crash the app
-      onError: (_) {},
-    );
-    _lifecycleListener ??= AppLifecycleListener(
-      onResume: () => processQueue(),
-    );
+    _connectivitySub = ref
+        .watch(connectivityProvider)
+        .onConnectivityChanged
+        .listen(
+          (results) {
+            if (results.any((r) => r != ConnectivityResult.none)) {
+              processQueue();
+            }
+          },
+          // Platform-channel hiccups must never crash the app
+          onError: (_) {},
+        );
+    _lifecycleListener ??= AppLifecycleListener(onResume: () => processQueue());
     ref.onDispose(() {
       _connectivitySub?.cancel();
       _lifecycleListener?.dispose();
@@ -148,10 +151,12 @@ class PublishQueueNotifier extends _$PublishQueueNotifier {
           // event
           break;
         } else {
-          await service.put(item.copyWith(
-            attempts: item.attempts + 1,
-            lastError: failure.message,
-          ));
+          await service.put(
+            item.copyWith(
+              attempts: item.attempts + 1,
+              lastError: failure.message,
+            ),
+          );
         }
       }
 
@@ -169,6 +174,12 @@ class PublishQueueNotifier extends _$PublishQueueNotifier {
     QueuedPublish item,
   ) async {
     try {
+      final mediaError = await ref
+          .read(imageManagerProvider.notifier)
+          .ensureUploaded(item.bodyContent);
+      if (mediaError != null) {
+        return PublishFailure(mediaError, kind: PublishErrorKind.offline);
+      }
       final publishService = ref.read(publishServiceProvider);
       final PublishResult result;
       if (item.isUpdate) {
@@ -183,6 +194,7 @@ class PublishQueueNotifier extends _$PublishQueueNotifier {
         );
       } else {
         result = await publishService.createPost(
+          attemptId: item.safetyDraftId ?? item.id,
           config: config,
           title: item.title,
           bodyContent: item.bodyContent,
@@ -192,6 +204,11 @@ class PublishQueueNotifier extends _$PublishQueueNotifier {
           categories: item.categories,
           tags: item.tags,
         );
+      }
+      if (result is PublishSuccess &&
+          result.commitSha != null &&
+          !item.asDraft) {
+        ref.read(deploymentProvider.notifier).track(result.commitSha!, sourcePath: result.filePath);
       }
       return switch (result) {
         PublishSuccess() => null,

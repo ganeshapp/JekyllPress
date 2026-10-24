@@ -260,3 +260,15 @@ Found a bug or have a feature request? [Open an issue](https://github.com/ganesh
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+## Deployment status
+
+After a successful save, the home screen follows **Saved → Building → Live**.
+Build failures keep the saved changes safe and offer a link to GitHub's build log.
+The last saved revision is remembered across restarts. Checks pause after ten minutes;
+**Check again** resumes them.
+
+For gapp.in, `deployment.json` identifies the deployed commit and Jekyll page URLs,
+so an old page returning HTTP 200 is not mistaken for the new version. Other sites
+can use GitHub Pages deployment status. Tokens need **Actions: Read** and
+**Deployments: Read** for those API checks. A status-check error never retries a save.

@@ -51,6 +51,7 @@ class _FakePublishService extends PublishService {
 
   @override
   Future<PublishResult> createPost({
+    String? attemptId,
     required AppConfig config,
     required String title,
     required String bodyContent,
@@ -132,6 +133,8 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('queue_provider_test');
     Hive.init(tempDir.path);
+    await Hive.openBox<Map>('publishing_state');
+    await Hive.openBox<String>('local_image_map');
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(AppConfigAdapter());
     }

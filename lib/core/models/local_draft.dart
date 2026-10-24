@@ -48,6 +48,17 @@ class LocalDraft extends HiveObject {
   @HiveField(9)
   String? originalFilePath;
 
+  @HiveField(10)
+  DateTime? publishDate;
+  @HiveField(11)
+  String? layout;
+  @HiveField(12)
+  List<String>? categories;
+  @HiveField(13)
+  List<String>? tags;
+  @HiveField(14, defaultValue: false)
+  bool frontmatterEdited;
+
   LocalDraft({
     required this.id,
     required this.title,
@@ -59,6 +70,11 @@ class LocalDraft extends HiveObject {
     this.originalDate,
     this.originalFrontmatter,
     this.originalFilePath,
+    this.publishDate,
+    this.layout,
+    this.categories,
+    this.tags,
+    this.frontmatterEdited = false,
   });
 
   /// Create a new draft for a brand new post
@@ -115,6 +131,11 @@ class LocalDraft extends HiveObject {
     String? title,
     String? bodyContent,
     DateTime? lastModified,
+    DateTime? publishDate,
+    String? layout,
+    List<String>? categories,
+    List<String>? tags,
+    bool? frontmatterEdited,
   }) {
     return LocalDraft(
       id: id,
@@ -127,20 +148,30 @@ class LocalDraft extends HiveObject {
       originalDate: originalDate,
       originalFrontmatter: originalFrontmatter,
       originalFilePath: originalFilePath,
+      publishDate: publishDate ?? this.publishDate,
+      layout: layout ?? this.layout,
+      categories: categories ?? this.categories,
+      tags: tags ?? this.tags,
+      frontmatterEdited: frontmatterEdited ?? this.frontmatterEdited,
     );
   }
 
   /// Check if draft has meaningful content worth saving
-  bool get hasContent => title.trim().isNotEmpty || bodyContent.trim().isNotEmpty;
+  bool get hasContent =>
+      title.trim().isNotEmpty || bodyContent.trim().isNotEmpty;
 
   /// Get a preview excerpt from body content
   String get excerpt {
-    final cleaned = bodyContent
-        .replaceAll(RegExp(r'!\[.*?\]\(.*?\)'), '') // Remove images
-        .replaceAll(RegExp(r'\[([^\]]+)\]\([^\)]+\)'), r'$1') // Links to text
-        .replaceAll(RegExp(r'[#*`~>]'), '') // Remove markdown chars
-        .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
-        .trim();
+    final cleaned =
+        bodyContent
+            .replaceAll(RegExp(r'!\[.*?\]\(.*?\)'), '') // Remove images
+            .replaceAll(
+              RegExp(r'\[([^\]]+)\]\([^\)]+\)'),
+              r'$1',
+            ) // Links to text
+            .replaceAll(RegExp(r'[#*`~>]'), '') // Remove markdown chars
+            .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
+            .trim();
 
     if (cleaned.length <= 100) return cleaned;
     return '${cleaned.substring(0, 97)}...';

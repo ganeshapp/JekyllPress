@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/app_config.dart';
 import '../models/blog_post.dart';
@@ -8,6 +9,7 @@ import '../services/publish_service.dart';
 import '../utils/frontmatter_parser.dart';
 import '../utils/permalink.dart';
 import 'config_provider.dart';
+import 'deployment_provider.dart';
 import 'image_provider.dart';
 import 'posts_provider.dart';
 
@@ -17,7 +19,10 @@ part 'publish_provider.g.dart';
 @riverpod
 PublishService publishService(Ref ref) {
   final uploadService = ref.watch(githubUploadServiceProvider);
-  return PublishService(uploadService: uploadService);
+  return PublishService(
+    uploadService: uploadService,
+    attempts: Hive.box<Map>('publishing_state'),
+  );
 }
 
 /// Filename a promoted draft gets in the posts dir: today's date prefix
@@ -49,15 +54,19 @@ String promotedFrontmatter({
 }) {
   final dateValue = PublishService.formatJekyllDate(now);
   if (rawFrontmatter.trim().isEmpty) {
-    return FrontmatterParser.generateFrontmatter(title: title, date: dateValue)
-        .trimRight();
+    return FrontmatterParser.generateFrontmatter(
+      title: title,
+      date: dateValue,
+    ).trimRight();
   }
   final parsed = FrontmatterParser.parseFields(rawFrontmatter);
   // A date the parser could not lift (multiline/odd form) still counts -
   // its passthrough key starts with 'date'
-  final hasDate = parsed.date != null ||
-      parsed.passthrough.keys
-          .any((k) => k.split('#').first.toLowerCase() == 'date');
+  final hasDate =
+      parsed.date != null ||
+      parsed.passthrough.keys.any(
+        (k) => k.split('#').first.toLowerCase() == 'date',
+      );
   if (hasDate) {
     return '---\n$rawFrontmatter\n---';
   }
@@ -138,6 +147,7 @@ class PublishNotifier extends _$PublishNotifier {
   /// defaults, '' / empty list omits the key (see PublishService.createPost).
   /// [asDraft] writes to the remote Jekyll drafts dir instead.
   Future<bool> publishNewPost({
+    String? attemptId,
     required String title,
     required String bodyContent,
     bool asDraft = false,
@@ -157,6 +167,7 @@ class PublishNotifier extends _$PublishNotifier {
     try {
       final publishService = ref.read(publishServiceProvider);
       final result = await publishService.createPost(
+        attemptId: attemptId,
         config: config,
         title: title,
         bodyContent: bodyContent,
@@ -173,17 +184,28 @@ class PublishNotifier extends _$PublishNotifier {
             filename: f,
             htmlUrl: url,
             // Remote drafts have no public page until promoted
-            publicUrl: asDraft
-                ? null
-                : buildPostUrl(
-                    siteUrl: config.siteUrl,
-                    baseurl: config.baseurl,
-                    permalinkPattern: config.permalinkPattern,
-                    fileName: f,
-                    date: publishDate ?? DateTime.now(),
-                    categories: categories ?? config.defaultCategories,
-                  ),
+            publicUrl:
+                asDraft
+                    ? null
+                    : buildPostUrl(
+                      siteUrl: config.siteUrl,
+                      baseurl: config.baseurl,
+                      permalinkPattern: config.permalinkPattern,
+                      fileName: f,
+                      date: publishDate ?? DateTime.now(),
+                      categories: categories ?? config.defaultCategories,
+                    ),
           );
+          if (result.commitSha != null &&
+              (state as PublishSucceeded).publicUrl != null) {
+            ref
+                .read(deploymentProvider.notifier)
+                .track(
+                  result.commitSha!,
+                  pageUrl: (state as PublishSucceeded).publicUrl,
+                  sourcePath: result.filePath,
+                );
+          }
           return true;
         case PublishFailure(message: final msg, kind: final kind):
           state = PublishFailed(msg, kind: kind);
@@ -242,17 +264,28 @@ class PublishNotifier extends _$PublishNotifier {
             filename: f,
             htmlUrl: url,
             // A remote draft edited in place has no public page
-            publicUrl: isRemoteDraft(originalPost, config)
-                ? null
-                : buildPostUrl(
-                    siteUrl: config.siteUrl,
-                    baseurl: config.baseurl,
-                    permalinkPattern: config.permalinkPattern,
-                    fileName: f,
-                    date: urlFields.date,
-                    categories: urlFields.categories,
-                  ),
+            publicUrl:
+                isRemoteDraft(originalPost, config)
+                    ? null
+                    : buildPostUrl(
+                      siteUrl: config.siteUrl,
+                      baseurl: config.baseurl,
+                      permalinkPattern: config.permalinkPattern,
+                      fileName: f,
+                      date: urlFields.date,
+                      categories: urlFields.categories,
+                    ),
           );
+          if (result.commitSha != null &&
+              (state as PublishSucceeded).publicUrl != null) {
+            ref
+                .read(deploymentProvider.notifier)
+                .track(
+                  result.commitSha!,
+                  pageUrl: (state as PublishSucceeded).publicUrl,
+                  sourcePath: result.filePath,
+                );
+          }
           return true;
         case PublishFailure(message: final msg, kind: final kind):
           state = PublishFailed(msg, kind: kind);
@@ -351,7 +384,8 @@ class PublishNotifier extends _$PublishNotifier {
   Future<String?> deleteRemotePost(BlogPost post) async {
     final config = _config;
     if (config == null) return 'No repository configured';
-    final path = post.filePath ??
+    final path =
+        post.filePath ??
         (post.fileName != null
             ? '${ContentService.cleanDir(config.postsPath)}/${post.fileName}'
             : null);
@@ -361,7 +395,9 @@ class PublishNotifier extends _$PublishNotifier {
           'refresh the post list and retry';
     }
 
-    final result = await ref.read(githubUploadServiceProvider).deleteFile(
+    final result = await ref
+        .read(githubUploadServiceProvider)
+        .deleteFile(
           config: config,
           path: path,
           sha: sha,

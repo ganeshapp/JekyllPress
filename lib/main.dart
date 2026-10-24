@@ -25,11 +25,13 @@ void main() async {
 
   // Open Hive boxes
   await Hive.openBox<AppConfig>('app_config');
+  await Hive.openBox<Map>('deployment_state');
   await Hive.openBox<BlogPost>('posts_box');
   await Hive.openBox<String>('local_image_map');
   await Hive.openBox<LocalDraft>('drafts_box');
   // Offline publish queue - plain-map entries, no TypeAdapter
   await Hive.openBox<Map>('publish_queue');
+  await Hive.openBox<Map>('publishing_state');
   // App-level settings (theme mode override)
   await Hive.openBox<String>('app_settings');
 

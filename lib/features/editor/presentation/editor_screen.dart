@@ -102,8 +102,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
       // Delay provider modification until after build completes
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         _initializeEditorProvider();
         _initializeDraftProvider();
+        ref.listenManual(editorControllerProvider, (previous, next) {
+          if (previous != null && (previous.publishDate != next.publishDate ||
+              previous.layout != next.layout || previous.categories != next.categories ||
+              previous.tags != next.tags)) {
+            _triggerAutoSave();
+          }
+        });
       });
     }
   }
@@ -124,6 +132,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       controller.initializeWithDraft(
         title: widget.resumeDraft!.title,
         bodyContent: widget.resumeDraft!.bodyContent,
+        savedDraft: widget.resumeDraft,
         originalPost: widget.resumeDraft!.isEditingExisting ? widget.post : null,
         defaultLayout: config?.defaultLayout,
         defaultCategories: config?.defaultCategories ?? const [],
@@ -188,6 +197,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return draftNotifier.forceSave(
       title: _titleController.text,
       bodyContent: _bodyController.text,
+      settings: ref.read(editorControllerProvider),
     );
   }
 
@@ -200,6 +210,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         draftNotifier.updateAndSave(
           title: _titleController.text,
           bodyContent: _bodyController.text,
+          settings: ref.read(editorControllerProvider),
         );
       }
     });
@@ -336,7 +347,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         if (isNewPost) {
           // Create new post - the Post settings sheet values drive the
           // front matter ('' / empty list = omit the key)
+          await _saveImmediately();
           success = await publishNotifier.publishNewPost(
+            attemptId: ref.read(currentDraftNotifierProvider.notifier).currentDraft?.id,
             title: title,
             bodyContent: bodyContent,
             asDraft: asDraft,

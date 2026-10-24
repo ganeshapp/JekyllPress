@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/blog_post.dart';
+import '../models/local_draft.dart';
 import '../utils/frontmatter_parser.dart';
 
 part 'editor_provider.g.dart';
@@ -130,23 +131,22 @@ class EditorState {
 
   @override
   int get hashCode => Object.hash(
-        title,
-        bodyContent,
-        originalPost,
-        baselineTitle,
-        baselineBody,
-        isDirty,
-        isNewPost,
-        publishDate,
-        originalDate,
-        layout,
-        Object.hashAll(categories),
-        Object.hashAll(tags),
-        // Order-independent, matching mapEquals semantics
-        passthrough.entries.fold<int>(
-            0, (h, e) => h ^ Object.hash(e.key, e.value)),
-        frontmatterEdited,
-      );
+    title,
+    bodyContent,
+    originalPost,
+    baselineTitle,
+    baselineBody,
+    isDirty,
+    isNewPost,
+    publishDate,
+    originalDate,
+    layout,
+    Object.hashAll(categories),
+    Object.hashAll(tags),
+    // Order-independent, matching mapEquals semantics
+    passthrough.entries.fold<int>(0, (h, e) => h ^ Object.hash(e.key, e.value)),
+    frontmatterEdited,
+  );
 }
 
 /// Controller for managing editor state
@@ -217,13 +217,15 @@ class EditorController extends _$EditorController {
     required String title,
     required String bodyContent,
     BlogPost? originalPost,
+    LocalDraft? savedDraft,
     String? defaultLayout,
     List<String> defaultCategories = const [],
     List<String> defaultTags = const [],
   }) {
-    final parsed = originalPost != null
-        ? FrontmatterParser.parseFields(originalPost.rawFrontmatter ?? '')
-        : null;
+    final parsed =
+        originalPost != null
+            ? FrontmatterParser.parseFields(originalPost.rawFrontmatter ?? '')
+            : null;
     state = EditorState(
       title: title,
       bodyContent: bodyContent,
@@ -232,31 +234,31 @@ class EditorController extends _$EditorController {
       baselineBody: bodyContent,
       isDirty: false,
       isNewPost: originalPost == null,
-      originalDate: parsed == null
-          ? null
-          : parsed.dateTime ??
-              FrontmatterParser.parseDateValue(originalPost!.date),
-      layout: parsed != null ? (parsed.layout ?? '') : (defaultLayout ?? ''),
-      categories: parsed?.categories ?? defaultCategories,
-      tags: parsed?.tags ?? defaultTags,
+      originalDate:
+          parsed == null
+              ? null
+              : parsed.dateTime ??
+                  FrontmatterParser.parseDateValue(originalPost!.date),
+      publishDate: savedDraft?.publishDate,
+      frontmatterEdited: savedDraft?.frontmatterEdited ?? false,
+      layout:
+          savedDraft?.layout ??
+          (parsed != null ? (parsed.layout ?? '') : (defaultLayout ?? '')),
+      categories:
+          savedDraft?.categories ?? parsed?.categories ?? defaultCategories,
+      tags: savedDraft?.tags ?? parsed?.tags ?? defaultTags,
       passthrough: parsed?.passthrough ?? const {},
     );
   }
 
   /// Update the title
   void updateTitle(String title) {
-    state = state.copyWith(
-      title: title,
-      isDirty: true,
-    );
+    state = state.copyWith(title: title, isDirty: true);
   }
 
   /// Update the body content
   void updateBody(String bodyContent) {
-    state = state.copyWith(
-      bodyContent: bodyContent,
-      isDirty: true,
-    );
+    state = state.copyWith(bodyContent: bodyContent, isDirty: true);
   }
 
   /// Update the publication date (Post settings sheet)

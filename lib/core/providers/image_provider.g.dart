@@ -88,7 +88,7 @@ final localImageMapBoxProvider = AutoDisposeProvider<Box<String>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef LocalImageMapBoxRef = AutoDisposeProviderRef<Box<String>>;
-String _$imageManagerHash() => r'f99be1a5a1d560f3a0432a4d58c2eafdf11a9ee5';
+String _$imageManagerHash() => r'5e5e42e70df4ba7111335a2495481fab4bda41f5';
 
 /// Notifier for managing media (image + video) operations
 /// keepAlive so upload statuses survive while the editor preview

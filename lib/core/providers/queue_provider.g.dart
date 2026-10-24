@@ -66,7 +66,7 @@ final publishQueueServiceProvider =
 // ignore: unused_element
 typedef PublishQueueServiceRef = AutoDisposeProviderRef<PublishQueueService>;
 String _$publishQueueNotifierHash() =>
-    r'4ee76128de0e932e07c4da05c3efafc08890302e';
+    r'3366869301135546703f60e21f4b87768e99651f';
 
 /// Offline publish queue: holds posts the user chose to 'publish when
 /// online' and flushes them FIFO through the existing PublishService

@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/local_draft.dart';
 import '../models/blog_post.dart';
+import 'editor_provider.dart';
 
 part 'drafts_provider.g.dart';
 
@@ -13,12 +14,7 @@ Box<LocalDraft> draftsBox(Ref ref) {
 }
 
 /// State for draft save operations
-enum DraftSaveStatus {
-  idle,
-  saving,
-  saved,
-  error,
-}
+enum DraftSaveStatus { idle, saving, saved, error }
 
 /// State class for the drafts notifier
 class DraftsState {
@@ -110,7 +106,8 @@ class DraftsNotifier extends _$DraftsNotifier {
 
   /// Create a draft from an existing BlogPost (for editing)
   LocalDraft createDraftFromPost(BlogPost post) {
-    final id = 'draft_edit_${post.fileName ?? DateTime.now().millisecondsSinceEpoch}';
+    final id =
+        'draft_edit_${post.fileName ?? DateTime.now().millisecondsSinceEpoch}';
     return LocalDraft.fromExistingPost(
       id: id,
       title: post.title,
@@ -164,7 +161,7 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
 
   /// Get current draft
   LocalDraft? get currentDraft => _currentDraft;
-  
+
   /// Get last saved timestamp
   DateTime? get lastSavedAt => _lastSavedAt;
 
@@ -186,7 +183,7 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
   /// Initialize draft for editing an existing post
   void initializeForExistingPost(BlogPost post) {
     final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
-    
+
     // Check if there's already a draft for this post
     final existingDraft = draftsNotifier.getDraftForPost(post);
     if (existingDraft != null) {
@@ -207,6 +204,7 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
   Future<bool> updateAndSave({
     String? title,
     String? bodyContent,
+    EditorState? settings,
   }) async {
     if (_currentDraft == null || _isClearing) return false;
 
@@ -215,6 +213,11 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
         title: title,
         bodyContent: bodyContent,
         lastModified: DateTime.now(),
+        publishDate: settings?.publishDate,
+        layout: settings?.layout,
+        categories: settings?.categories,
+        tags: settings?.tags,
+        frontmatterEdited: settings?.frontmatterEdited,
       );
       _currentDraft = updatedDraft;
 
@@ -278,6 +281,7 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
   Future<bool> forceSave({
     required String title,
     required String bodyContent,
+    EditorState? settings,
   }) async {
     if (_currentDraft == null || _isClearing) return false;
 
@@ -285,6 +289,11 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
       title: title,
       bodyContent: bodyContent,
       lastModified: DateTime.now(),
+      publishDate: settings?.publishDate,
+      layout: settings?.layout,
+      categories: settings?.categories,
+      tags: settings?.tags,
+      frontmatterEdited: settings?.frontmatterEdited,
     );
     _currentDraft = updatedDraft;
 
@@ -332,7 +341,7 @@ class CurrentDraftNotifier extends _$CurrentDraftNotifier {
       final draftsNotifier = ref.read(draftsNotifierProvider.notifier);
       await draftsNotifier.deleteDraft(_currentDraft!.id);
     }
-    
+
     _currentDraft = null;
     _lastSavedAt = null;
     state = DraftSaveStatus.idle;

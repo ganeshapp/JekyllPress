@@ -43,7 +43,7 @@ final draftsNotifierProvider =
 
 typedef _$DraftsNotifier = AutoDisposeNotifier<DraftsState>;
 String _$currentDraftNotifierHash() =>
-    r'39fb1498d0f297e44002d929fd021416a7b01a8c';
+    r'ada0b46931070080da03ff131874de04ec96d9c7';
 
 /// Manages the current editing session's draft state
 ///
